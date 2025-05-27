@@ -619,7 +619,7 @@
             }
         };
 
-        // Function to apply anchor text linking to article content
+        // Fixed function to apply anchor text linking to article content
         function applyAnchorTextLinking(articleContent) {
             if (!anchorTextData || anchorTextData.length === 0) {
                 console.log('No anchor text data available for linking');
@@ -628,81 +628,89 @@
 
             let linkedContent = articleContent;
             let linksApplied = 0;
+            const maxLinks = 10;
 
-            // Sort anchor texts by length (longest first) to avoid partial matches
+            // Collect all anchor texts with their URLs
             const allAnchors = [];
             anchorTextData.forEach(item => {
                 item.anchorTexts.forEach(text => {
-                    allAnchors.push({
-                        text: text,
-                        url: item.url
-                    });
+                    if (text && text.trim().length >= 3) { // Only process anchor texts with 3+ characters
+                        allAnchors.push({
+                            text: text.trim(),
+                            url: item.url
+                        });
+                    }
                 });
             });
 
             // Sort by length descending to match longer phrases first
             allAnchors.sort((a, b) => b.text.length - a.text.length);
 
-            // Track which parts of the text have already been linked
-            const linkedPositions = new Set();
+            console.log(`Processing ${allAnchors.length} anchor texts for linking`);
 
-            allAnchors.forEach(anchor => {
-                if (!anchor.text || anchor.text.trim().length < 3) return; // Skip very short anchor texts
+            // Process each anchor text
+            for (const anchor of allAnchors) {
+                if (linksApplied >= maxLinks) break;
 
-                // Create case-insensitive regex with word boundaries
+                // Escape special regex characters
                 const escapedText = anchor.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                
+                // Create regex with word boundaries for exact word matching
                 const regex = new RegExp(`\\b${escapedText}\\b`, 'gi');
-
+                
+                // Find all matches
+                const matches = [];
                 let match;
+                
                 while ((match = regex.exec(linkedContent)) !== null) {
-                    const startPos = match.index;
-                    const endPos = startPos + match[0].length;
-
-                    // Check if this position is already inside a link or HTML tag
-                    const beforeMatch = linkedContent.substring(0, startPos);
-                    const unclosedTags = (beforeMatch.match(/<[^>]*>/g) || []).length - 
-                                        (beforeMatch.match(/<\/[^>]*>/g) || []).length;
+                    matches.push({
+                        index: match.index,
+                        text: match[0],
+                        length: match[0].length
+                    });
                     
-                    // Skip if we're inside an HTML tag or already linked text
-                    if (unclosedTags > 0 || 
-                        beforeMatch.includes('<a ') && !beforeMatch.includes('</a>') ||
-                        linkedContent.substring(startPos - 10, startPos).includes('<a ')) {
-                        continue;
-                    }
-
-                    // Check for overlap with previously linked positions
-                    let hasOverlap = false;
-                    for (let i = startPos; i < endPos; i++) {
-                        if (linkedPositions.has(i)) {
-                            hasOverlap = true;
-                            break;
-                        }
-                    }
-
-                    if (!hasOverlap) {
-                        // Mark positions as linked
-                        for (let i = startPos; i < endPos; i++) {
-                            linkedPositions.add(i);
-                        }
-
-                        // Apply the link
-                        const linkedText = `<a href="${anchor.url}" target="_blank" style="color: #667eea; text-decoration: underline;">${match[0]}</a>`;
-                        linkedContent = linkedContent.substring(0, startPos) + 
-                                      linkedText + 
-                                      linkedContent.substring(endPos);
-                        
-                        linksApplied++;
-                        
-                        // Update regex lastIndex due to content length change
-                        regex.lastIndex = startPos + linkedText.length;
-                        
-                        // Limit to avoid too many links in one article
-                        if (linksApplied >= 10) break;
+                    // Reset regex to avoid infinite loop
+                    if (regex.lastIndex === match.index) {
+                        regex.lastIndex++;
                     }
                 }
-                
-                if (linksApplied >= 10) return;
-            });
+
+                // Process matches in reverse order to maintain correct indices
+                matches.reverse().forEach(matchInfo => {
+                    const startPos = matchInfo.index;
+                    const endPos = startPos + matchInfo.length;
+                    
+                    // Check if this text is already inside an HTML tag or link
+                    const beforeText = linkedContent.substring(0, startPos);
+                    const afterText = linkedContent.substring(endPos);
+                    
+                    // Skip if we're inside an existing link tag
+                    const lastOpenLink = beforeText.lastIndexOf('<a ');
+                    const lastCloseLink = beforeText.lastIndexOf('</a>');
+                    
+                    if (lastOpenLink > lastCloseLink && lastOpenLink !== -1) {
+                        return; // Skip - we're inside a link
+                    }
+                    
+                    // Skip if we're inside any HTML tag
+                    const lastOpenTag = beforeText.lastIndexOf('<');
+                    const lastCloseTag = beforeText.lastIndexOf('>');
+                    
+                    if (lastOpenTag > lastCloseTag && lastOpenTag !== -1) {
+                        return; // Skip - we're inside an HTML tag
+                    }
+
+                    // Create the HTML link
+                    const linkedText = `<a href="${anchor.url}" target="_blank" style="color: #667eea; text-decoration: underline;">${matchInfo.text}</a>`;
+                    
+                    // Replace the text with the linked version
+                    linkedContent = linkedContent.substring(0, startPos) + linkedText + linkedContent.substring(endPos);
+                    
+                    linksApplied++;
+                    
+                    if (linksApplied >= maxLinks) return;
+                });
+            }
 
             console.log(`Applied ${linksApplied} anchor text links to article`);
             return linkedContent;
