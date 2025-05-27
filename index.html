@@ -1,0 +1,1245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Source News Automation Tool</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+
+        .header h1 {
+            color: #2d3748;
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 1.1rem;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1.5fr;
+            gap: 30px;
+            align-items: start;
+        }
+
+        .panel {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .panel h2 {
+            color: #2d3748;
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        .source-group {
+            background: #f8fafc;
+            border: 2px solid #e2e8f0;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .source-group:hover {
+            border-color: #667eea;
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.15);
+            transform: translateY(-2px);
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            color: #4a5568;
+            margin-bottom: 5px;
+        }
+
+        input[type="text"], textarea {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            font-size: 14px;
+            transition: border-color 0.3s ease;
+            background: white;
+        }
+
+        input[type="text"]:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #718096, #4a5568);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #f56565, #c53030);
+        }
+
+        .url-list {
+            max-height: 150px;
+            overflow-y: auto;
+            background: white;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            margin-top: 10px;
+        }
+
+        .url-item {
+            padding: 10px 15px;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background-color 0.3s ease;
+        }
+
+        .url-item:hover {
+            background-color: #f7fafc;
+        }
+
+        .url-item:last-child {
+            border-bottom: none;
+        }
+
+        .progress-container {
+            margin: 20px 0;
+            display: none;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e2e8f0;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .status-message {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 8px;
+            font-weight: 500;
+        }
+
+        .status-success {
+            background: #c6f6d5;
+            color: #22543d;
+            border: 1px solid #9ae6b4;
+        }
+
+        .status-error {
+            background: #fed7d7;
+            color: #742a2a;
+            border: 1px solid #feb2b2;
+        }
+
+        .status-info {
+            background: #bee3f8;
+            color: #2a4365;
+            border: 1px solid #90cdf4;
+        }
+
+        .tabs {
+            display: flex;
+            margin-bottom: 20px;
+            background: #f7fafc;
+            border-radius: 10px;
+            padding: 5px;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 12px;
+            text-align: center;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            color: #4a5568;
+        }
+
+        .tab.active {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .results-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .result-item {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .result-item:hover {
+            border-color: #667eea;
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.1);
+            transform: translateY(-1px);
+        }
+
+        .result-title {
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 5px;
+        }
+
+        .result-meta {
+            font-size: 12px;
+            color: #718096;
+        }
+
+        .article-preview {
+            background: white;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 20px;
+            max-height: 500px;
+            overflow-y: auto;
+            line-height: 1.6;
+        }
+
+        .article-preview h2 {
+            color: #2d3748;
+            margin-top: 20px;
+            margin-bottom: 10px;
+            padding-bottom: 5px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 40px;
+        }
+
+        .spinner {
+            border: 4px solid #e2e8f0;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .add-group-btn {
+            width: 100%;
+            margin-bottom: 20px;
+            padding: 15px;
+            font-size: 16px;
+        }
+
+        .control-buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            .panel {
+                padding: 20px;
+            }
+
+            .control-buttons {
+                flex-direction: column;
+            }
+
+            .btn {
+                margin-right: 0;
+            }
+        }
+
+        .url-input-container {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .url-input-container input {
+            flex: 1;
+        }
+
+        .btn-small {
+            padding: 8px 16px;
+            font-size: 12px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #718096;
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Multi-Source News Automation Tool</h1>
+            <p>Generate comprehensive articles from multiple sources using AI</p>
+        </div>
+
+        <div class="main-content">
+            <div class="panel">
+                <h2>Article Groups</h2>
+                
+                <div class="control-buttons">
+                    <button class="btn add-group-btn" onclick="window.newsApp.addSourceGroup()">
+                        Add Article Group
+                    </button>
+                    <button class="btn" onclick="window.newsApp.processAllGroups()">
+                        Process All Groups
+                    </button>
+                    <button class="btn btn-secondary" onclick="window.newsApp.exportResults()">
+                        Export Results
+                    </button>
+                    <button class="btn btn-secondary" onclick="window.newsApp.clearAll()">
+                        Clear All
+                    </button>
+                    <button class="btn btn-secondary" onclick="window.newsApp.showConfigDialog()">
+                        Configure API
+                    </button>
+                </div>
+
+                <div class="progress-container" id="progressContainer">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                    <div class="status-message status-info" id="statusMessage">
+                        Processing...
+                    </div>
+                </div>
+
+                <div id="sourceGroups"></div>
+
+                <div class="empty-state" id="emptyState">
+                    <div class="empty-state-icon">📰</div>
+                    <p>No article groups yet. Click "Add Article Group" to get started!</p>
+                </div>
+            </div>
+
+            <div class="panel">
+                <h2>Results</h2>
+                
+                <div class="tabs">
+                    <div class="tab active" onclick="window.newsApp.switchTab('results')">Preview</div>
+                    <div class="tab" onclick="window.newsApp.switchTab('article')">Article</div>
+                    <div class="tab" onclick="window.newsApp.switchTab('json')">JSON</div>
+                </div>
+
+                <div class="tab-content active" id="results-content">
+                    <div class="results-list" id="resultsList">
+                        <div class="empty-state">
+                            <div class="empty-state-icon">📄</div>
+                            <p>Process some article groups to see results here!</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="article-content">
+                    <div class="article-preview" id="articlePreview">
+                        <div class="empty-state">
+                            <div class="empty-state-icon">📖</div>
+                            <p>Select a result to preview the article</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="json-content">
+                    <div class="article-preview">
+                        <pre id="jsonPreview">No JSON data available</pre>
+                    </div>
+                </div>
+
+                <div class="loading" id="loadingIndicator">
+                    <div class="spinner"></div>
+                    <p>Processing articles...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Create global namespace for the app
+        window.newsApp = {};
+
+        // Application state
+        let sourceGroups = [];
+        let results = [];
+        let groupIdCounter = 0;
+
+        // Configuration
+        const config = {
+            workerUrl: 'https://frosty-deep-seek-qwen-sun-3793.cold-wildflower-f63a.workers.dev/',
+            timeout: 120000,
+            userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        };
+
+        // Source group management
+        window.newsApp.addSourceGroup = function() {
+            const group = {
+                id: ++groupIdCounter,
+                title: `Article ${sourceGroups.length + 1}`,
+                urls: [],
+                status: 'pending'
+            };
+            
+            sourceGroups.push(group);
+            updateUI();
+        };
+
+        window.newsApp.removeSourceGroup = function(groupId) {
+            sourceGroups = sourceGroups.filter(g => g.id !== groupId);
+            updateUI();
+        };
+
+        window.newsApp.addUrlToGroup = function(groupId, url) {
+            if (!url.trim()) return;
+            
+            const group = sourceGroups.find(g => g.id === groupId);
+            if (group && !group.urls.includes(url)) {
+                group.urls.push(url);
+                updateUI();
+            }
+        };
+
+        window.newsApp.removeUrlFromGroup = function(groupId, url) {
+            const group = sourceGroups.find(g => g.id === groupId);
+            if (group) {
+                group.urls = group.urls.filter(u => u !== url);
+                updateUI();
+            }
+        };
+
+        window.newsApp.updateGroupTitle = function(groupId, title) {
+            const group = sourceGroups.find(g => g.id === groupId);
+            if (group) {
+                group.title = title;
+            }
+        };
+
+        // Tab management
+        window.newsApp.switchTab = function(tabName) {
+            // Update tab buttons
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            event.target.classList.add('active');
+
+            // Update tab content
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            document.getElementById(tabName + '-content').classList.add('active');
+        };
+
+        // UI rendering
+        function updateUI() {
+            renderSourceGroups();
+            renderResults();
+            updateEmptyStates();
+        }
+
+        function renderSourceGroups() {
+            const container = document.getElementById('sourceGroups');
+            
+            if (sourceGroups.length === 0) {
+                container.innerHTML = '';
+                return;
+            }
+
+            container.innerHTML = sourceGroups.map(group => `
+                <div class="source-group">
+                    <div class="form-group">
+                        <label>Article Title:</label>
+                        <input type="text" value="${group.title}" 
+                               onchange="window.newsApp.updateGroupTitle(${group.id}, this.value)"
+                               placeholder="Enter article title...">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>URLs:</label>
+                        <div class="url-input-container">
+                            <input type="text" id="urlInput${group.id}" 
+                                   placeholder="Enter URL and press Enter..."
+                                   onkeypress="if(event.key==='Enter') { window.newsApp.addUrlToGroup(${group.id}, this.value); this.value=''; }">
+                            <button class="btn btn-small" 
+                                    onclick="window.newsApp.addUrlToGroup(${group.id}, document.getElementById('urlInput${group.id}').value); document.getElementById('urlInput${group.id}').value='';">
+                                Add URL
+                            </button>
+                        </div>
+                        
+                        <div class="url-list">
+                            ${group.urls.map(url => `
+                                <div class="url-item">
+                                    <span style="word-break: break-all;">${url}</span>
+                                    <button class="btn btn-small btn-danger" 
+                                            onclick="window.newsApp.removeUrlFromGroup(${group.id}, '${url}')">
+                                        Remove
+                                    </button>
+                                </div>
+                            `).join('')}
+                            ${group.urls.length === 0 ? '<div class="url-item" style="color: #718096;">No URLs added yet</div>' : ''}
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px;">
+                        <span style="font-size: 12px; color: #718096;">
+                            Status: ${group.status} | URLs: ${group.urls.length}
+                        </span>
+                        <button class="btn btn-small btn-danger" onclick="window.newsApp.removeSourceGroup(${group.id})">
+                            Remove Group
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderResults() {
+            const container = document.getElementById('resultsList');
+            
+            if (results.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📄</div>
+                        <p>Process some article groups to see results here!</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = results.map((result, index) => `
+                <div class="result-item" onclick="window.newsApp.showArticlePreview(${index})">
+                    <div class="result-title">${result.title}</div>
+                    <div class="result-meta">
+                        Sources: ${result.sourceCount} | 
+                        Generated: ${new Date(result.timestamp).toLocaleString()}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function updateEmptyStates() {
+            const emptyState = document.getElementById('emptyState');
+            emptyState.style.display = sourceGroups.length === 0 ? 'block' : 'none';
+        }
+
+        // Processing
+        window.newsApp.processAllGroups = async function() {
+            const validGroups = sourceGroups.filter(g => g.urls.length > 0);
+            
+            if (validGroups.length === 0) {
+                showMessage('No groups with URLs to process', 'error');
+                return;
+            }
+
+            if (!config.workerUrl || config.workerUrl.includes('your-cloudflare-worker')) {
+                showMessage('Please configure your Cloudflare Worker URL', 'error');
+                return;
+            }
+
+            // Show progress
+            const progressContainer = document.getElementById('progressContainer');
+            const progressFill = document.getElementById('progressFill');
+            const statusMessage = document.getElementById('statusMessage');
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            
+            progressContainer.style.display = 'block';
+            loadingIndicator.style.display = 'block';
+            progressFill.style.width = '0%';
+
+            // Clear previous results
+            results = [];
+            updateUI();
+
+            try {
+                for (let i = 0; i < validGroups.length; i++) {
+                    const group = validGroups[i];
+                    const progress = ((i + 1) / validGroups.length) * 100;
+                    
+                    statusMessage.textContent = `Processing: ${group.title}`;
+                    progressFill.style.width = progress + '%';
+                    
+                    try {
+                        // Extract content from URLs
+                        const extractedData = await extractFromMultipleUrls(group.urls, group.title);
+                        
+                        if (extractedData.error) {
+                            console.error(`Failed to extract from group ${group.title}:`, extractedData.error);
+                            continue;
+                        }
+
+                        // Generate article
+                        statusMessage.textContent = `Generating article: ${group.title}`;
+                        const article = await generateArticle(extractedData);
+                        
+                        // Generate metadata
+                        statusMessage.textContent = `Generating metadata: ${group.title}`;
+                        const metadata = await generateMetadata(article, group.title);
+
+                        // Add to results
+                        const result = {
+                            title: extractHeadline(article),
+                            article: article,
+                            metadata: metadata,
+                            urls: group.urls,
+                            sourceCount: group.urls.length,
+                            timestamp: new Date().toISOString()
+                        };
+                        
+                        results.push(result);
+                        group.status = 'completed';
+                        
+                    } catch (error) {
+                        console.error(`Error processing group ${group.title}:`, error);
+                        group.status = 'error';
+                    }
+                }
+
+                statusMessage.textContent = `Completed: ${results.length}/${validGroups.length} articles generated`;
+                progressFill.style.width = '100%';
+                
+                setTimeout(() => {
+                    progressContainer.style.display = 'none';
+                    loadingIndicator.style.display = 'none';
+                }, 2000);
+
+                updateUI();
+                updateJsonPreview();
+                
+                if (results.length > 0) {
+                    showMessage(`Generated ${results.length} articles successfully!`, 'success');
+                }
+
+            } catch (error) {
+                console.error('Processing error:', error);
+                showMessage('Error during processing: ' + error.message, 'error');
+                progressContainer.style.display = 'none';
+                loadingIndicator.style.display = 'none';
+            }
+        };
+
+        // Content extraction (simplified for web)
+        async function extractFromMultipleUrls(urls, title) {
+            console.log('Extracting from URLs:', urls);
+            
+            // Simulate delay
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            return {
+                title: title,
+                urls: urls,
+                sources: urls.map(url => ({
+                    url: url,
+                    title: `Content from ${new URL(url).hostname}`,
+                    content: `Sample content extracted from ${url}. This would contain the actual article text in a real implementation.`,
+                    markdown: `# Sample Content\n\nThis is sample content extracted from ${url}.`
+                })),
+                combined_content: `Combined content from ${urls.length} sources about ${title}`,
+                source_count: urls.length
+            };
+        }
+
+        // Article generation
+        async function generateArticle(extractedData) {
+            const systemPrompt = `You are a skilled journalist specializing in factual news reporting with a commitment to accuracy and precision. 
+
+Your primary responsibility is to report ONLY verifiable facts from the provided sources WITHOUT adding any speculative content, opinions, or information not explicitly present in the sources.
+
+Your expertise is in organizing and synthesizing information from multiple sources into coherent, detailed news articles while maintaining COMPLETE factual accuracy. You never add details, quotes, statistics, or claims that are not explicitly supported by the source materials.`;
+
+            const userPrompt = `Create a detailed factual news article based EXCLUSIVELY on information from these ${extractedData.source_count} sources. You must adhere to these strict guidelines:
+
+SOURCES:
+${extractedData.sources.map((source, i) => `Source ${i+1} (${source.url}):\nTitle: ${source.title}\nContent: ${source.content.substring(0, 1500)}`).join('\n\n')}
+
+CRITICAL FACTUAL GUIDELINES:
+1. ONLY include information that is explicitly stated in the provided sources
+2. DO NOT add ANY details, statistics, quotes, or claims not directly supported by the sources
+3. DO NOT speculate, embellish, or extend beyond what the sources actually state
+4. If the sources have contradictory information, present both perspectives but do not attempt to resolve them
+5. If there are gaps in the information, leave them as gaps - DO NOT fill in missing details with assumptions
+
+ARTICLE REQUIREMENTS:
+1. Begin with a FACTUAL headline summarizing the main news point
+   - Base the headline only on explicit information from the sources
+   - Include specific companies, figures, or developments mentioned in the sources
+
+2. Structure the article in a professional news format:
+   - Start with a lead paragraph summarizing the core facts
+   - Develop the article with detailed sections organized by topic
+   - Use short, clear paragraphs (2-3 sentences each) for readability
+   - Include as much detail as the sources provide for a comprehensive article (800-1200 words)
+   - DO NOT include a conclusion or summary section at the end
+
+3. Include proper HTML-formatted section headings:
+   - Format section headings with <h2> tags, e.g., <h2>Financial Impact</h2>
+   - Create 3-4 descriptive section headings based on the content from the sources
+   - DO NOT include a "Conclusion" or "Summary" heading
+
+4. Prioritize specific details from the sources:
+   - Include ALL specific facts, figures, statistics, and dates mentioned in the sources
+   - Present contextual information ONLY if it appears in the sources
+   - DO NOT add background information unless it's explicitly provided in the sources
+
+5. DO NOT refer to or cite the sources in the article
+   - Present all information as verified fact
+   - Do not use phrases like "according to sources" or "reports suggest"
+
+The first line must be the headline ONLY. Then skip a line and start the article body.
+
+IMPORTANT: 
+- STAY STRICTLY WITHIN THE BOUNDARIES OF THE PROVIDED SOURCES
+- If the sources don't provide enough information for a long article, create a shorter article rather than adding unsupported details
+- ACCURACY IS MORE IMPORTANT THAN LENGTH OR COMPLETENESS
+- Double-check that EVERY fact in your article is directly supported by the sources
+- End the article naturally without a conclusion section or summary`;
+
+            return await makeLLMRequest(systemPrompt, userPrompt);
+        }
+
+        // Metadata generation
+        async function generateMetadata(article, title) {
+            try {
+                const headline = extractHeadline(article);
+                
+                // Generate URL slug
+                const urlSlug = generateUrlSlug(headline);
+                
+                // Generate metadata concurrently for better performance
+                const [metaDescription, tags, keywords, category, industry, region] = await Promise.allSettled([
+                    generateMetaDescription(article),
+                    generateTags(article),
+                    generateKeywords(article),
+                    determineCategory(article),
+                    identifyIndustry(article),
+                    identifyRegion(article)
+                ]);
+
+                return {
+                    meta_title: headline,
+                    meta_description: metaDescription.status === 'fulfilled' ? metaDescription.value : 'Generated news article',
+                    url_slug: urlSlug,
+                    tags: tags.status === 'fulfilled' ? tags.value : ['news', 'article'],
+                    keywords: keywords.status === 'fulfilled' ? keywords.value : 'news, article',
+                    category: category.status === 'fulfilled' ? category.value : 'Industry_News',
+                    industry: industry.status === 'fulfilled' ? industry.value : 'All',
+                    region: region.status === 'fulfilled' ? region.value : 'Global'
+                };
+            } catch (error) {
+                console.error('Error generating metadata:', error);
+                // Return default metadata if generation fails
+                return {
+                    meta_title: extractHeadline(article),
+                    meta_description: 'Generated news article',
+                    url_slug: generateUrlSlug(title),
+                    tags: ['news', 'article'],
+                    keywords: 'news, article',
+                    category: 'Industry_News',
+                    industry: 'All',
+                    region: 'Global'
+                };
+            }
+        }
+
+        // Helper functions for metadata generation
+        function extractHeadline(article) {
+            const lines = article.trim().split('\n');
+            const headline = lines[0].replace(/^\*+/, '').trim();
+            return headline || 'Generated Article';
+        }
+
+        function generateUrlSlug(text) {
+            return text.toLowerCase()
+                .replace(/[^\w\s-]/g, '')
+                .replace(/\s+/g, '-')
+                .replace(/-+/g, '-')
+                .substring(0, 60)
+                .replace(/-$/, '');
+        }
+
+        async function generateMetaDescription(content) {
+            try {
+                const systemPrompt = "You are an SEO specialist creating effective meta descriptions.";
+                const userPrompt = `Create a 150-character meta description for this article:
+- Summarize main points
+- Include primary keywords
+- Create interest
+- No explanations, just the description
+
+Reply with ONLY the meta description text - no explanations, comments, or additional text.
+
+Article: ${content.substring(0, 800)}`;
+                
+                const response = await makeLLMRequest(systemPrompt, userPrompt);
+                return response.substring(0, 150);
+            } catch (error) {
+                console.error('Error generating meta description:', error);
+                return 'Generated news article with comprehensive coverage';
+            }
+        }
+
+        async function generateTags(content) {
+            try {
+                const systemPrompt = "You are a content tagging specialist.";
+                const userPrompt = `Generate EXACTLY 3-4 relevant tags for this article.
+Reply with ONLY comma-separated tags. No explanations or additional text.
+
+Example correct response: "tag1, tag2, tag3, tag4"
+
+Article: ${content.substring(0, 1000)}`;
+                
+                const response = await makeLLMRequest(systemPrompt, userPrompt);
+                return response.split(',').map(tag => tag.trim()).slice(0, 4);
+            } catch (error) {
+                console.error('Error generating tags:', error);
+                return ['news', 'article', 'industry'];
+            }
+        }
+
+        async function generateKeywords(content) {
+            try {
+                const systemPrompt = "You are an SEO specialist.";
+                const userPrompt = `Generate 4-6 SEO keywords for this article.
+Reply with ONLY comma-separated keywords. No explanations or additional text.
+
+Article: ${content.substring(0, 1000)}`;
+                
+                return await makeLLMRequest(systemPrompt, userPrompt);
+            } catch (error) {
+                console.error('Error generating keywords:', error);
+                return 'news, article, industry, business';
+            }
+        }
+
+        async function determineCategory(content) {
+            try {
+                const systemPrompt = "You are a content categorization specialist.";
+                const userPrompt = `Determine if this belongs to "Project_News" or "Industry_News":
+- Project_News: Specific projects, developments, contracts
+- Industry_News: Trends, market analysis, regulations
+
+Reply with ONLY the category name - either "Project_News" or "Industry_News". No explanations or additional text.
+
+Article: ${content.substring(0, 1000)}`;
+                
+                const response = await makeLLMRequest(systemPrompt, userPrompt);
+                return ['Project_News', 'Industry_News'].includes(response.trim()) ? response.trim() : 'Industry_News';
+            } catch (error) {
+                console.error('Error determining category:', error);
+                return 'Industry_News';
+            }
+        }
+
+        async function identifyIndustry(content) {
+            try {
+                const industries = [
+                    "Market Research", "Oil & Gas", "Semiconductor", "Power", 
+                    "Utilities", "Industrial", "Infrastructure", "Construction", 
+                    "Data Centers", "Chemical", "Hydrogen", "Mining", "CCUS", 
+                    "Electric Vehicles", "All"
+                ];
+                
+                const systemPrompt = "You are a business analyst for industry classification.";
+                const userPrompt = `Identify the main industry from this list:
+${industries.join(', ')}
+
+Reply with ONLY the exact industry name from the list. No explanations or additional text.
+
+Article: ${content.substring(0, 1000)}`;
+                
+                const response = await makeLLMRequest(systemPrompt, userPrompt);
+                const matchedIndustry = industries.find(ind => ind.toLowerCase() === response.trim().toLowerCase());
+                return matchedIndustry || 'All';
+            } catch (error) {
+                console.error('Error identifying industry:', error);
+                return 'All';
+            }
+        }
+
+        async function identifyRegion(content) {
+            try {
+                const regions = ["Global", "North America", "Europe", "Middle East", 
+                               "South America", "Asia-Pacific", "Africa"];
+                
+                const systemPrompt = "You are a geopolitical analyst.";
+                const userPrompt = `Identify the primary region from this list:
+${regions.join(', ')}
+
+Reply with ONLY the region name from the list. No explanations or additional text.
+
+Article: ${content.substring(0, 1000)}`;
+                
+                const response = await makeLLMRequest(systemPrompt, userPrompt);
+                const matchedRegion = regions.find(region => region.toLowerCase() === response.trim().toLowerCase());
+                return matchedRegion || 'Global';
+            } catch (error) {
+                console.error('Error identifying region:', error);
+                return 'Global';
+            }
+        }
+
+        // LLM API request
+        async function makeLLMRequest(systemPrompt, userPrompt) {
+            try {
+                const response = await fetch(config.workerUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'User-Agent': config.userAgent
+                    },
+                    body: JSON.stringify({
+                        system_prompt: systemPrompt,
+                        user_prompt: userPrompt
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+
+                return data.response || data.text || '';
+            } catch (error) {
+                console.error('LLM request failed:', error);
+                throw new Error(`API request failed: ${error.message}`);
+            }
+        }
+
+        // Preview and display functions
+        window.newsApp.showArticlePreview = function(index) {
+            if (index >= 0 && index < results.length) {
+                const result = results[index];
+                const preview = document.getElementById('articlePreview');
+                
+                // Format article with proper HTML styling
+                const formattedArticle = formatArticleForDisplay(result.article);
+                preview.innerHTML = formattedArticle;
+                
+                // Switch to article tab
+                window.newsApp.switchTab('article');
+                
+                // Update tab button state
+                document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+                document.querySelectorAll('.tab')[1].classList.add('active');
+            }
+        };
+
+        function formatArticleForDisplay(article) {
+            // Ensure proper HTML formatting for readability
+            let formatted = article
+                .replace(/\n\n/g, '</p><p>')
+                .replace(/\n/g, '<br>');
+            
+            // Wrap in paragraphs if not already done
+            if (!formatted.startsWith('<p>')) {
+                formatted = '<p>' + formatted + '</p>';
+            }
+            
+            // Ensure h2 tags are properly formatted
+            formatted = formatted.replace(/<h2>/g, '</p><h2>').replace(/<\/h2>/g, '</h2><p>');
+            
+            // Clean up any double paragraph tags
+            formatted = formatted.replace(/<\/p><p><\/p>/g, '</p>').replace(/<p><\/p>/g, '');
+            
+            return formatted;
+        }
+
+        function updateJsonPreview() {
+            if (results.length === 0) {
+                document.getElementById('jsonPreview').textContent = 'No results to display';
+                return;
+            }
+
+            const jsonData = results.map(result => ({
+                category: "News_release",
+                subCategory: result.metadata?.category || 'Industry_News',
+                region: result.metadata?.region || 'Global',
+                industry: result.metadata?.industry || 'All',
+                subIndustry: "",
+                title: result.title,
+                description: result.article,
+                tags: result.metadata?.tags || [],
+                uploads: { svg: null, png: null },
+                trending: false,
+                meta: {
+                    title: result.metadata?.meta_title || result.title,
+                    description: result.metadata?.meta_description || '',
+                    keywords: result.metadata?.keywords || ''
+                },
+                pageURL: result.metadata?.url_slug || '',
+                relatedContentTag: result.metadata?.industry || 'All',
+                lastUpdated: new Date().toLocaleDateString('en-GB')
+            }));
+
+            document.getElementById('jsonPreview').textContent = JSON.stringify(jsonData, null, 2);
+        }
+
+        // Export functions
+        window.newsApp.exportResults = function() {
+            if (results.length === 0) {
+                showMessage('No results to export', 'error');
+                return;
+            }
+
+            const jsonData = results.map(result => ({
+                category: "News_release",
+                subCategory: result.metadata?.category || 'Industry_News',
+                region: result.metadata?.region || 'Global',
+                industry: result.metadata?.industry || 'All',
+                subIndustry: "",
+                title: result.title,
+                description: result.article,
+                tags: result.metadata?.tags || [],
+                uploads: { svg: null, png: null },
+                trending: false,
+                meta: {
+                    title: result.metadata?.meta_title || result.title,
+                    description: result.metadata?.meta_description || '',
+                    keywords: result.metadata?.keywords || ''
+                },
+                pageURL: result.metadata?.url_slug || '',
+                relatedContentTag: result.metadata?.industry || 'All',
+                lastUpdated: new Date().toLocaleDateString('en-GB')
+            }));
+
+            // Create and download JSON file
+            const blob = new Blob([JSON.stringify(jsonData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `news_articles_${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            showMessage(`Exported ${results.length} articles successfully!`, 'success');
+        };
+
+        // Utility functions
+        window.newsApp.clearAll = function() {
+            if (confirm('Are you sure you want to clear all groups and results?')) {
+                sourceGroups = [];
+                results = [];
+                groupIdCounter = 0;
+                updateUI();
+                document.getElementById('jsonPreview').textContent = 'No results to display';
+                document.getElementById('articlePreview').innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📖</div>
+                        <p>Select a result to preview the article</p>
+                    </div>
+                `;
+                showMessage('All data cleared', 'info');
+            }
+        };
+
+        function showMessage(message, type) {
+            // Create a temporary message element
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `status-message status-${type}`;
+            messageDiv.textContent = message;
+            messageDiv.style.position = 'fixed';
+            messageDiv.style.top = '20px';
+            messageDiv.style.right = '20px';
+            messageDiv.style.zIndex = '1000';
+            messageDiv.style.maxWidth = '300px';
+            
+            document.body.appendChild(messageDiv);
+            
+            setTimeout(() => {
+                if (document.body.contains(messageDiv)) {
+                    document.body.removeChild(messageDiv);
+                }
+            }, 5000);
+        }
+
+        // Auto-save functionality
+        function saveToLocalStorage() {
+            try {
+                localStorage.setItem('newsApp_sourceGroups', JSON.stringify(sourceGroups));
+                localStorage.setItem('newsApp_results', JSON.stringify(results));
+                localStorage.setItem('newsApp_groupIdCounter', groupIdCounter.toString());
+            } catch (error) {
+                console.warn('Could not save to localStorage:', error);
+            }
+        }
+
+        function loadFromLocalStorage() {
+            try {
+                const savedGroups = localStorage.getItem('newsApp_sourceGroups');
+                const savedResults = localStorage.getItem('newsApp_results');
+                const savedCounter = localStorage.getItem('newsApp_groupIdCounter');
+                
+                if (savedGroups) {
+                    sourceGroups = JSON.parse(savedGroups);
+                }
+                if (savedResults) {
+                    results = JSON.parse(savedResults);
+                    updateJsonPreview();
+                }
+                if (savedCounter) {
+                    groupIdCounter = parseInt(savedCounter);
+                }
+                
+                updateUI();
+            } catch (error) {
+                console.warn('Could not load from localStorage:', error);
+            }
+        }
+
+        // Auto-save every 30 seconds
+        setInterval(saveToLocalStorage, 30000);
+
+        // Configuration management
+        window.newsApp.showConfigDialog = function() {
+            const newUrl = prompt('Enter your Cloudflare Worker URL:', config.workerUrl);
+            if (newUrl && newUrl.trim()) {
+                config.workerUrl = newUrl.trim();
+                localStorage.setItem('newsApp_config', JSON.stringify(config));
+                showMessage('Configuration updated successfully!', 'success');
+            }
+        };
+
+        // Load config from localStorage
+        function loadConfig() {
+            try {
+                const savedConfig = localStorage.getItem('newsApp_config');
+                if (savedConfig) {
+                    Object.assign(config, JSON.parse(savedConfig));
+                }
+            } catch (error) {
+                console.warn('Could not load config:', error);
+            }
+        }
+
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', function() {
+            loadConfig();
+            loadFromLocalStorage();
+            updateUI();
+        });
+
+        // Save before page unload
+        window.addEventListener('beforeunload', saveToLocalStorage);
+    </script>
+</body>
+</html>
