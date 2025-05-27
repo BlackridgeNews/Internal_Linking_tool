@@ -101,7 +101,7 @@
             margin-bottom: 5px;
         }
 
-        input[type="text"], textarea {
+        input[type="text"], input[type="password"], textarea {
             width: 100%;
             padding: 12px 16px;
             border: 2px solid #e2e8f0;
@@ -111,7 +111,7 @@
             background: white;
         }
 
-        input[type="text"]:focus, textarea:focus {
+        input[type="text"]:focus, input[type="password"]:focus, textarea:focus {
             outline: none;
             border-color: #667eea;
             box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
@@ -388,7 +388,7 @@
     <div class="container">
         <div class="header">
             <h1>Multi-Source News Automation Tool</h1>
-            <p>Generate comprehensive articles from multiple sources using AI</p>
+            <p>Generate comprehensive articles from multiple sources using AI with automatic anchor text linking</p>
         </div>
 
         <div class="main-content">
@@ -401,6 +401,9 @@
                     </button>
                     <button class="btn" onclick="window.newsApp.processAllGroups()">
                         Process All Groups
+                    </button>
+                    <button class="btn btn-secondary" onclick="window.newsApp.loadAnchorTexts()">
+                        Load Anchor Texts
                     </button>
                     <button class="btn btn-secondary" onclick="window.newsApp.exportResults()">
                         Export Results
@@ -420,6 +423,11 @@
                     <div class="status-message status-info" id="statusMessage">
                         Processing...
                     </div>
+                </div>
+
+                <div id="anchorTextStatus" style="margin-bottom: 15px; padding: 10px; background: #f8fafc; 
+                     border-radius: 8px; font-size: 14px; color: #4a5568; display: none;">
+                    <strong>Anchor Texts:</strong> <span id="anchorTextCount">0</span> entries loaded
                 </div>
 
                 <div id="sourceGroups"></div>
@@ -484,8 +492,13 @@
         const config = {
             workerUrl: 'https://frosty-deep-seek-qwen-sun-3793.cold-wildflower-f63a.workers.dev/',
             timeout: 120000,
-            userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            googleSheetId: '1GT0kLFRtG8QTWgpW4O6bJh_rfgzmDWAiWbjp4hrXWA8',
+            googleApiKey: '' // Will be set by user
         };
+
+        // Global variable to store anchor text data
+        let anchorTextData = [];
 
         // Source group management
         window.newsApp.addSourceGroup = function() {
@@ -544,6 +557,156 @@
             });
             document.getElementById(tabName + '-content').classList.add('active');
         };
+
+        // Google Sheets Integration
+        window.newsApp.loadAnchorTexts = async function() {
+            if (!config.googleApiKey) {
+                showMessage('Please configure your Google API key first', 'error');
+                return;
+            }
+
+            try {
+                showMessage('Loading anchor texts from Google Sheet...', 'info');
+                
+                const response = await fetch(
+                    `https://sheets.googleapis.com/v4/spreadsheets/${config.googleSheetId}/values/Sheet1!C:G?key=${config.googleApiKey}`
+                );
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                const rows = data.values || [];
+
+                // Parse the data (skip header row if exists)
+                anchorTextData = [];
+                for (let i = 1; i < rows.length; i++) {
+                    const row = rows[i];
+                    if (row && row[0]) { // URL exists in column C (index 0)
+                        const url = row[0];
+                        const anchorTexts = [
+                            row[1], // Column D
+                            row[2], // Column E
+                            row[3], // Column F
+                            row[4]  // Column G
+                        ].filter(text => text && text.trim()); // Remove empty entries
+
+                        if (anchorTexts.length > 0) {
+                            anchorTextData.push({
+                                url: url,
+                                anchorTexts: anchorTexts
+                            });
+                        }
+                    }
+                }
+
+                showMessage(`Loaded ${anchorTextData.length} anchor text entries from Google Sheet`, 'success');
+                
+                // Update UI to show anchor text status
+                const statusElement = document.getElementById('anchorTextStatus');
+                const countElement = document.getElementById('anchorTextCount');
+                if (statusElement && countElement) {
+                    countElement.textContent = anchorTextData.length;
+                    statusElement.style.display = 'block';
+                }
+                
+                console.log('Loaded anchor text data:', anchorTextData);
+
+            } catch (error) {
+                console.error('Error loading anchor texts:', error);
+                showMessage('Failed to load anchor texts: ' + error.message, 'error');
+            }
+        };
+
+        // Function to apply anchor text linking to article content
+        function applyAnchorTextLinking(articleContent) {
+            if (!anchorTextData || anchorTextData.length === 0) {
+                console.log('No anchor text data available for linking');
+                return articleContent;
+            }
+
+            let linkedContent = articleContent;
+            let linksApplied = 0;
+
+            // Sort anchor texts by length (longest first) to avoid partial matches
+            const allAnchors = [];
+            anchorTextData.forEach(item => {
+                item.anchorTexts.forEach(text => {
+                    allAnchors.push({
+                        text: text,
+                        url: item.url
+                    });
+                });
+            });
+
+            // Sort by length descending to match longer phrases first
+            allAnchors.sort((a, b) => b.text.length - a.text.length);
+
+            // Track which parts of the text have already been linked
+            const linkedPositions = new Set();
+
+            allAnchors.forEach(anchor => {
+                if (!anchor.text || anchor.text.trim().length < 3) return; // Skip very short anchor texts
+
+                // Create case-insensitive regex with word boundaries
+                const escapedText = anchor.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const regex = new RegExp(`\\b${escapedText}\\b`, 'gi');
+
+                let match;
+                while ((match = regex.exec(linkedContent)) !== null) {
+                    const startPos = match.index;
+                    const endPos = startPos + match[0].length;
+
+                    // Check if this position is already inside a link or HTML tag
+                    const beforeMatch = linkedContent.substring(0, startPos);
+                    const unclosedTags = (beforeMatch.match(/<[^>]*>/g) || []).length - 
+                                        (beforeMatch.match(/<\/[^>]*>/g) || []).length;
+                    
+                    // Skip if we're inside an HTML tag or already linked text
+                    if (unclosedTags > 0 || 
+                        beforeMatch.includes('<a ') && !beforeMatch.includes('</a>') ||
+                        linkedContent.substring(startPos - 10, startPos).includes('<a ')) {
+                        continue;
+                    }
+
+                    // Check for overlap with previously linked positions
+                    let hasOverlap = false;
+                    for (let i = startPos; i < endPos; i++) {
+                        if (linkedPositions.has(i)) {
+                            hasOverlap = true;
+                            break;
+                        }
+                    }
+
+                    if (!hasOverlap) {
+                        // Mark positions as linked
+                        for (let i = startPos; i < endPos; i++) {
+                            linkedPositions.add(i);
+                        }
+
+                        // Apply the link
+                        const linkedText = `<a href="${anchor.url}" target="_blank" style="color: #667eea; text-decoration: underline;">${match[0]}</a>`;
+                        linkedContent = linkedContent.substring(0, startPos) + 
+                                      linkedText + 
+                                      linkedContent.substring(endPos);
+                        
+                        linksApplied++;
+                        
+                        // Update regex lastIndex due to content length change
+                        regex.lastIndex = startPos + linkedText.length;
+                        
+                        // Limit to avoid too many links in one article
+                        if (linksApplied >= 10) break;
+                    }
+                }
+                
+                if (linksApplied >= 10) return;
+            });
+
+            console.log(`Applied ${linksApplied} anchor text links to article`);
+            return linkedContent;
+        }
 
         // UI rendering
         function updateUI() {
@@ -685,14 +848,17 @@
                         statusMessage.textContent = `Generating article: ${group.title}`;
                         const article = await generateArticle(extractedData);
                         
+                        // Apply anchor text linking to the article
+                        const linkedArticle = applyAnchorTextLinking(article);
+                        
                         // Generate metadata
                         statusMessage.textContent = `Generating metadata: ${group.title}`;
-                        const metadata = await generateMetadata(article, group.title);
+                        const metadata = await generateMetadata(linkedArticle, group.title);
 
                         // Add to results
                         const result = {
-                            title: extractHeadline(article),
-                            article: article,
+                            title: extractHeadline(linkedArticle),
+                            article: linkedArticle,
                             metadata: metadata,
                             urls: group.urls,
                             sourceCount: group.urls.length,
@@ -1086,7 +1252,7 @@ Article: ${content.substring(0, 1000)}`;
                 },
                 pageURL: result.metadata?.url_slug || '',
                 relatedContentTag: result.metadata?.industry || 'All',
-                lastUpdated: new Date().toLocaleDateString('en-GB').replace(/\//g, '-')
+                lastUpdated: new Date().toLocaleDateString('en-GB')
             }));
 
             document.getElementById('jsonPreview').textContent = JSON.stringify(jsonData, null, 2);
@@ -1117,7 +1283,7 @@ Article: ${content.substring(0, 1000)}`;
                 },
                 pageURL: result.metadata?.url_slug || '',
                 relatedContentTag: result.metadata?.industry || 'All',
-                lastUpdated: new Date().toLocaleDateString('en-GB').replace(/\//g, '-')
+                lastUpdated: new Date().toLocaleDateString('en-GB')
             }));
 
             // Create and download JSON file
@@ -1172,6 +1338,78 @@ Article: ${content.substring(0, 1000)}`;
             }, 5000);
         }
 
+        // Configuration management
+        window.newsApp.showConfigDialog = function() {
+            const currentWorkerUrl = config.workerUrl;
+            const currentApiKey = config.googleApiKey;
+
+            const configHtml = `
+                <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+                           background: rgba(0,0,0,0.5); z-index: 10000; display: flex; 
+                           justify-content: center; align-items: center;">
+                    <div style="background: white; padding: 30px; border-radius: 15px; 
+                               width: 90%; max-width: 500px; box-shadow: 0 20px 40px rgba(0,0,0,0.3);">
+                        <h3 style="margin-bottom: 20px; color: #2d3748;">Configure API Settings</h3>
+                        
+                        <div style="margin-bottom: 15px;">
+                            <label style="display: block; margin-bottom: 5px; font-weight: 600;">
+                                Cloudflare Worker URL:
+                            </label>
+                            <input type="text" id="configWorkerUrl" value="${currentWorkerUrl}" 
+                                   style="width: 100%; padding: 10px; border: 2px solid #e2e8f0; 
+                                          border-radius: 8px; font-size: 14px;">
+                        </div>
+                        
+                        <div style="margin-bottom: 20px;">
+                            <label style="display: block; margin-bottom: 5px; font-weight: 600;">
+                                Google Sheets API Key:
+                            </label>
+                            <input type="password" id="configApiKey" value="${currentApiKey}" 
+                                   style="width: 100%; padding: 10px; border: 2px solid #e2e8f0; 
+                                          border-radius: 8px; font-size: 14px;">
+                            <small style="color: #718096; font-size: 12px;">
+                                Get your API key from Google Cloud Console → APIs & Services → Credentials
+                            </small>
+                        </div>
+                        
+                        <div style="text-align: right;">
+                            <button onclick="this.closest('div').parentElement.remove()" 
+                                    style="background: #718096; color: white; border: none; 
+                                           padding: 10px 20px; border-radius: 8px; margin-right: 10px; cursor: pointer;">
+                                Cancel
+                            </button>
+                            <button onclick="window.newsApp.saveConfig()" 
+                                    style="background: linear-gradient(135deg, #667eea, #764ba2); color: white; 
+                                           border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer;">
+                                Save
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            document.body.insertAdjacentHTML('beforeend', configHtml);
+        };
+
+        window.newsApp.saveConfig = function() {
+            const workerUrl = document.getElementById('configWorkerUrl').value.trim();
+            const apiKey = document.getElementById('configApiKey').value.trim();
+
+            if (workerUrl) {
+                config.workerUrl = workerUrl;
+            }
+            if (apiKey) {
+                config.googleApiKey = apiKey;
+            }
+
+            localStorage.setItem('newsApp_config', JSON.stringify(config));
+            
+            // Remove the dialog
+            document.querySelector('div[style*="position: fixed"]').remove();
+            
+            showMessage('Configuration saved successfully!', 'success');
+        };
+
         // Auto-save functionality
         function saveToLocalStorage() {
             try {
@@ -1209,16 +1447,6 @@ Article: ${content.substring(0, 1000)}`;
         // Auto-save every 30 seconds
         setInterval(saveToLocalStorage, 30000);
 
-        // Configuration management
-        window.newsApp.showConfigDialog = function() {
-            const newUrl = prompt('Enter your Cloudflare Worker URL:', config.workerUrl);
-            if (newUrl && newUrl.trim()) {
-                config.workerUrl = newUrl.trim();
-                localStorage.setItem('newsApp_config', JSON.stringify(config));
-                showMessage('Configuration updated successfully!', 'success');
-            }
-        };
-
         // Load config from localStorage
         function loadConfig() {
             try {
@@ -1236,6 +1464,11 @@ Article: ${content.substring(0, 1000)}`;
             loadConfig();
             loadFromLocalStorage();
             updateUI();
+            
+            // Auto-load anchor texts if API key is configured
+            if (config.googleApiKey) {
+                window.newsApp.loadAnchorTexts();
+            }
         });
 
         // Save before page unload
