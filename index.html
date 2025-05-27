@@ -568,23 +568,8 @@
             try {
                 showMessage('Loading anchor texts from Google Sheet...', 'info');
                 
-                // First, let's get the sheet metadata to find the correct tab name
-                const metadataResponse = await fetch(
-                    `https://sheets.googleapis.com/v4/spreadsheets/${config.googleSheetId}?key=${config.googleApiKey}`
-                );
-
-                if (!metadataResponse.ok) {
-                    throw new Error(`HTTP error! status: ${metadataResponse.status}`);
-                }
-
-                const metadata = await metadataResponse.json();
-                const sheetName = metadata.sheets[0].properties.title; // Get the first sheet's name
-                
-                console.log('Found sheet name:', sheetName);
-                
-                // Now fetch the data using the correct sheet name
                 const response = await fetch(
-                    `https://sheets.googleapis.com/v4/spreadsheets/${config.googleSheetId}/values/${encodeURIComponent(sheetName)}!C:G?key=${config.googleApiKey}`
+                    `https://sheets.googleapis.com/v4/spreadsheets/${config.googleSheetId}/values/Sheet1!C:G?key=${config.googleApiKey}`
                 );
 
                 if (!response.ok) {
@@ -631,59 +616,10 @@
             } catch (error) {
                 console.error('Error loading anchor texts:', error);
                 showMessage('Failed to load anchor texts: ' + error.message, 'error');
-                
-                // Additional debugging info
-                if (error.message.includes('400')) {
-                    showMessage('This is likely a sheet tab name issue. Check the console for details.', 'info');
-                    console.log('Debug: Try this URL to check your sheet structure:');
-                    console.log(`https://sheets.googleapis.com/v4/spreadsheets/${config.googleSheetId}?key=${config.googleApiKey}`);
-                }
             }
         };
 
         // Function to apply anchor text linking to article content
-        function applyAnchorTextLinking(articleContent) {
-            if (!anchorTextData || anchorTextData.length === 0) {
-                console.log('No anchor text data available for linking');
-                return articleContent;
-            }
-
-            console.log('Starting anchor text linking process...');
-            console.log('Available anchor texts:', anchorTextData);
-            console.log('Article content (first 500 chars):', articleContent.substring(0, 500));
-
-            let linkedContent = articleContent;
-            let linksApplied = 0;
-
-            // Sort anchor texts by length (longest first) to avoid partial matches
-            const allAnchors = [];
-            anchorTextData.forEach(item => {
-                item.anchorTexts.forEach(text => {
-                    allAnchors.push({
-                        text: text,
-                        url: item.url
-                    });
-                });
-            });
-
-            console.log('Total anchor texts to process:', allAnchors.length);
-
-            // Sort by length descending to match longer phrases first
-            allAnchors.sort((a, b) => b.text.length - a.text.length);
-
-            // Track which parts of the text have already been linked
-            const linkedPositions = new Set();
-
-            allAnchors.forEach((anchor, index) => {
-                if (!anchor.text || anchor.text.trim().length < 3) {
-                    console.log(`Skipping short anchor text: "${anchor.text}"`);
-                    return; // Skip very short anchor texts
-                }
-
-                console.log(`Processing anchor ${index + 1}/${allAnchors.length}: "${anchor.text}" → ${anchor.url}`);
-
-                // Create case-insensitive regex with word boundaries
-                const escapedText = anchor.text.replace(/[.*+?^${}()|[\]\\]/g, '\\        // Function to apply anchor text linking to article content
         function applyAnchorTextLinking(articleContent) {
             if (!anchorTextData || anchorTextData.length === 0) {
                 console.log('No anchor text data available for linking');
@@ -769,82 +705,6 @@
             });
 
             console.log(`Applied ${linksApplied} anchor text links to article`);
-            return linkedContent;
-        }');
-                const regex = new RegExp(`\\b${escapedText}\\b`, 'gi');
-
-                let match;
-                let matchCount = 0;
-                while ((match = regex.exec(linkedContent)) !== null) {
-                    matchCount++;
-                    console.log(`Found match ${matchCount} for "${anchor.text}" at position ${match.index}`);
-                    
-                    const startPos = match.index;
-                    const endPos = startPos + match[0].length;
-
-                    // Check if this position is already inside a link or HTML tag
-                    const beforeMatch = linkedContent.substring(0, startPos);
-                    const unclosedTags = (beforeMatch.match(/<[^>]*>/g) || []).length - 
-                                        (beforeMatch.match(/<\/[^>]*>/g) || []).length;
-                    
-                    // Skip if we're inside an HTML tag or already linked text
-                    if (unclosedTags > 0 || 
-                        beforeMatch.includes('<a ') && !beforeMatch.includes('</a>') ||
-                        linkedContent.substring(startPos - 10, startPos).includes('<a ')) {
-                        console.log(`Skipping match - inside HTML tag or already linked`);
-                        continue;
-                    }
-
-                    // Check for overlap with previously linked positions
-                    let hasOverlap = false;
-                    for (let i = startPos; i < endPos; i++) {
-                        if (linkedPositions.has(i)) {
-                            hasOverlap = true;
-                            break;
-                        }
-                    }
-
-                    if (!hasOverlap) {
-                        // Mark positions as linked
-                        for (let i = startPos; i < endPos; i++) {
-                            linkedPositions.add(i);
-                        }
-
-                        // Apply the link
-                        const linkedText = `<a href="${anchor.url}" target="_blank" style="color: #667eea; text-decoration: underline;">${match[0]}</a>`;
-                        linkedContent = linkedContent.substring(0, startPos) + 
-                                      linkedText + 
-                                      linkedContent.substring(endPos);
-                        
-                        linksApplied++;
-                        console.log(`✅ Applied link ${linksApplied}: "${match[0]}" → ${anchor.url}`);
-                        
-                        // Update regex lastIndex due to content length change
-                        regex.lastIndex = startPos + linkedText.length;
-                        
-                        // Limit to avoid too many links in one article
-                        if (linksApplied >= 10) {
-                            console.log('Reached maximum links limit (10)');
-                            break;
-                        }
-                    } else {
-                        console.log(`Skipping match - overlaps with existing link`);
-                    }
-                }
-                
-                if (matchCount === 0) {
-                    console.log(`No matches found for: "${anchor.text}"`);
-                }
-                
-                if (linksApplied >= 10) return;
-            });
-
-            console.log(`🎯 FINAL RESULT: Applied ${linksApplied} anchor text links to article`);
-            
-            if (linksApplied > 0) {
-                console.log('Article with links (first 1000 chars):', linkedContent.substring(0, 1000));
-            }
-            
             return linkedContent;
         }
 
