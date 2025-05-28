@@ -425,6 +425,24 @@
                     </div>
                 </div>
 
+                <!-- Extraction Log Panel -->
+                <div class="extraction-log" id="extractionLog" style="display: none;">
+                    <h3 style="margin-bottom: 15px; color: #2d3748; font-size: 1.1rem;">📊 Extraction Log</h3>
+                    <div class="log-content" id="logContent" style="max-height: 200px; overflow-y: auto; 
+                         background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; 
+                         font-family: 'Courier New', monospace; font-size: 13px; line-height: 1.5;">
+                        <div style="color: #718096;">Extraction log will appear here...</div>
+                    </div>
+                    <div style="text-align: right; margin-top: 10px;">
+                        <button class="btn btn-small btn-secondary" onclick="window.newsApp.clearLog()">
+                            Clear Log
+                        </button>
+                        <button class="btn btn-small btn-secondary" onclick="window.newsApp.toggleLogExpand()">
+                            <span id="logToggleText">Expand</span>
+                        </button>
+                    </div>
+                </div>
+
                 <div id="anchorTextStatus" style="margin-bottom: 15px; padding: 10px; background: #f8fafc; 
                      border-radius: 8px; font-size: 14px; color: #4a5568; display: none;">
                     <strong>Anchor Texts:</strong> <span id="anchorTextCount">0</span> entries loaded
@@ -499,6 +517,82 @@
 
         // Global variable to store anchor text data
         let anchorTextData = [];
+
+        // Extraction logging functions
+        let extractionLogExpanded = false;
+        
+        function addToExtractionLog(message, type = 'info') {
+            const logContent = document.getElementById('logContent');
+            const logContainer = document.getElementById('extractionLog');
+            
+            if (!logContent) return;
+            
+            // Show log container if hidden
+            if (logContainer) {
+                logContainer.style.display = 'block';
+            }
+            
+            // Clear initial message if present
+            if (logContent.innerHTML.includes('Extraction log will appear here...')) {
+                logContent.innerHTML = '';
+            }
+            
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.style.marginBottom = '5px';
+            
+            let color = '#4a5568';
+            let icon = 'ℹ️';
+            
+            switch (type) {
+                case 'success':
+                    color = '#22543d';
+                    icon = '✅';
+                    break;
+                case 'error':
+                    color = '#c53030';
+                    icon = '❌';
+                    break;
+                case 'warning':
+                    color = '#d69e2e';
+                    icon = '⚠️';
+                    break;
+                case 'summary':
+                    color = '#2b6cb0';
+                    icon = '📊';
+                    break;
+            }
+            
+            logEntry.innerHTML = `<span style="color: #718096;">${timestamp}</span> <span style="color: ${color};">${icon} ${message}</span>`;
+            logContent.appendChild(logEntry);
+            
+            // Auto-scroll to bottom
+            logContent.scrollTop = logContent.scrollHeight;
+        }
+        
+        window.newsApp.clearLog = function() {
+            const logContent = document.getElementById('logContent');
+            if (logContent) {
+                logContent.innerHTML = '<div style="color: #718096;">Log cleared...</div>';
+            }
+        };
+        
+        window.newsApp.toggleLogExpand = function() {
+            const logContent = document.getElementById('logContent');
+            const toggleText = document.getElementById('logToggleText');
+            
+            if (!logContent || !toggleText) return;
+            
+            extractionLogExpanded = !extractionLogExpanded;
+            
+            if (extractionLogExpanded) {
+                logContent.style.maxHeight = '400px';
+                toggleText.textContent = 'Collapse';
+            } else {
+                logContent.style.maxHeight = '200px';
+                toggleText.textContent = 'Expand';
+            }
+        };
 
         // Source group management
         window.newsApp.addSourceGroup = function() {
@@ -619,7 +713,7 @@
             }
         };
 
-        // Fixed function to apply anchor text linking to article content
+        // Function to apply anchor text linking to article content
         function applyAnchorTextLinking(articleContent) {
             if (!anchorTextData || anchorTextData.length === 0) {
                 console.log('No anchor text data available for linking');
@@ -628,92 +722,293 @@
 
             let linkedContent = articleContent;
             let linksApplied = 0;
-            const maxLinks = 10;
 
-            // Collect all anchor texts with their URLs
+            // Sort anchor texts by length (longest first) to avoid partial matches
             const allAnchors = [];
             anchorTextData.forEach(item => {
                 item.anchorTexts.forEach(text => {
-                    if (text && text.trim().length >= 3) { // Only process anchor texts with 3+ characters
-                        allAnchors.push({
-                            text: text.trim(),
-                            url: item.url
-                        });
-                    }
+                    allAnchors.push({
+                        text: text,
+                        url: item.url
+                    });
                 });
             });
 
             // Sort by length descending to match longer phrases first
             allAnchors.sort((a, b) => b.text.length - a.text.length);
 
-            console.log(`Processing ${allAnchors.length} anchor texts for linking`);
+            // Track which parts of the text have already been linked
+            const linkedPositions = new Set();
 
-            // Process each anchor text
-            for (const anchor of allAnchors) {
-                if (linksApplied >= maxLinks) break;
+            allAnchors.forEach(anchor => {
+                if (!anchor.text || anchor.text.trim().length < 3) return; // Skip very short anchor texts
 
-                // Escape special regex characters
+                // Create case-insensitive regex with word boundaries
                 const escapedText = anchor.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                
-                // Create regex with word boundaries for exact word matching
                 const regex = new RegExp(`\\b${escapedText}\\b`, 'gi');
-                
-                // Find all matches
-                const matches = [];
+
                 let match;
-                
                 while ((match = regex.exec(linkedContent)) !== null) {
-                    matches.push({
-                        index: match.index,
-                        text: match[0],
-                        length: match[0].length
-                    });
+                    const startPos = match.index;
+                    const endPos = startPos + match[0].length;
+
+                    // Check if this position is already inside a link or HTML tag
+                    const beforeMatch = linkedContent.substring(0, startPos);
+                    const unclosedTags = (beforeMatch.match(/<[^>]*>/g) || []).length - 
+                                        (beforeMatch.match(/<\/[^>]*>/g) || []).length;
                     
-                    // Reset regex to avoid infinite loop
-                    if (regex.lastIndex === match.index) {
-                        regex.lastIndex++;
+                    // Skip if we're inside an HTML tag or already linked text
+                    if (unclosedTags > 0 || 
+                        beforeMatch.includes('<a ') && !beforeMatch.includes('</a>') ||
+                        linkedContent.substring(startPos - 10, startPos).includes('<a ')) {
+                        continue;
+                    }
+
+                    // Check for overlap with previously linked positions
+                    let hasOverlap = false;
+                    for (let i = startPos; i < endPos; i++) {
+                        if (linkedPositions.has(i)) {
+                            hasOverlap = true;
+                            break;
+                        }
+                    }
+
+                    if (!hasOverlap) {
+                        // Mark positions as linked
+                        for (let i = startPos; i < endPos; i++) {
+                            linkedPositions.add(i);
+                        }
+
+                        // Apply the link
+                        const linkedText = `<a href="${anchor.url}" target="_blank" style="color: #667eea; text-decoration: underline;">${match[0]}</a>`;
+                        linkedContent = linkedContent.substring(0, startPos) + 
+                                      linkedText + 
+                                      linkedContent.substring(endPos);
+                        
+                        linksApplied++;
+                        
+                        // Update regex lastIndex due to content length change
+                        regex.lastIndex = startPos + linkedText.length;
+                        
+                        // Limit to avoid too many links in one article
+                        if (linksApplied >= 10) break;
                     }
                 }
-
-                // Process matches in reverse order to maintain correct indices
-                matches.reverse().forEach(matchInfo => {
-                    const startPos = matchInfo.index;
-                    const endPos = startPos + matchInfo.length;
-                    
-                    // Check if this text is already inside an HTML tag or link
-                    const beforeText = linkedContent.substring(0, startPos);
-                    const afterText = linkedContent.substring(endPos);
-                    
-                    // Skip if we're inside an existing link tag
-                    const lastOpenLink = beforeText.lastIndexOf('<a ');
-                    const lastCloseLink = beforeText.lastIndexOf('</a>');
-                    
-                    if (lastOpenLink > lastCloseLink && lastOpenLink !== -1) {
-                        return; // Skip - we're inside a link
-                    }
-                    
-                    // Skip if we're inside any HTML tag
-                    const lastOpenTag = beforeText.lastIndexOf('<');
-                    const lastCloseTag = beforeText.lastIndexOf('>');
-                    
-                    if (lastOpenTag > lastCloseTag && lastOpenTag !== -1) {
-                        return; // Skip - we're inside an HTML tag
-                    }
-
-                    // Create the HTML link
-                    const linkedText = `<a href="${anchor.url}" target="_blank" style="color: #667eea; text-decoration: underline;">${matchInfo.text}</a>`;
-                    
-                    // Replace the text with the linked version
-                    linkedContent = linkedContent.substring(0, startPos) + linkedText + linkedContent.substring(endPos);
-                    
-                    linksApplied++;
-                    
-                    if (linksApplied >= maxLinks) return;
-                });
-            }
+                
+                if (linksApplied >= 10) return;
+            });
 
             console.log(`Applied ${linksApplied} anchor text links to article`);
             return linkedContent;
+        }
+
+        // Content extraction using Jina AI Reader with visible logging
+        async function extractFromMultipleUrls(urls, title) {
+            addToExtractionLog(`🚀 Starting extraction for "${title}" - ${urls.length} URLs to process`);
+            
+            const sources = [];
+            const failedUrls = [];
+            const extractionDetails = [];
+            
+            for (let i = 0; i < urls.length; i++) {
+                const url = urls[i];
+                const hostname = new URL(url).hostname.replace('www.', '');
+                
+                const urlStatus = {
+                    url: url,
+                    status: 'pending',
+                    contentLength: 0,
+                    error: null
+                };
+                
+                try {
+                    // Update status message for user feedback
+                    const statusMessage = document.getElementById('statusMessage');
+                    if (statusMessage) {
+                        statusMessage.textContent = `Extracting content from URL ${i + 1}/${urls.length}: ${hostname}`;
+                        statusMessage.className = 'status-message status-info';
+                    }
+                    
+                    addToExtractionLog(`[${i + 1}/${urls.length}] Extracting from ${hostname}...`);
+                    
+                    const extractedContent = await extractWithJinaAI(url);
+                    
+                    if (extractedContent.content && extractedContent.content.trim().length > 100) {
+                        const contentLength = extractedContent.content.trim().length;
+                        
+                        sources.push({
+                            url: url,
+                            title: extractedContent.title || `Content from ${hostname}`,
+                            content: extractedContent.content.trim(),
+                            markdown: extractedContent.markdown || extractedContent.content.trim(),
+                            extractedAt: new Date().toISOString(),
+                            contentLength: contentLength
+                        });
+                        
+                        urlStatus.status = 'success';
+                        urlStatus.contentLength = contentLength;
+                        
+                        addToExtractionLog(`${hostname}: Extracted ${contentLength.toLocaleString()} characters`, 'success');
+                        
+                    } else {
+                        const error = 'Content too short or empty (< 100 characters)';
+                        urlStatus.status = 'failed';
+                        urlStatus.error = error;
+                        failedUrls.push({ url, reason: error });
+                        
+                        addToExtractionLog(`${hostname}: ${error}`, 'error');
+                    }
+                    
+                } catch (error) {
+                    urlStatus.status = 'failed';
+                    urlStatus.error = error.message;
+                    failedUrls.push({ url, reason: error.message });
+                    
+                    addToExtractionLog(`${hostname}: ${error.message}`, 'error');
+                }
+                
+                extractionDetails.push(urlStatus);
+                
+                // Add delay between requests to avoid rate limiting
+                if (i < urls.length - 1) {
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+            }
+            
+            // Final extraction summary
+            const totalContent = sources.reduce((sum, source) => sum + source.contentLength, 0);
+            
+            addToExtractionLog(`EXTRACTION COMPLETE FOR "${title}":`, 'summary');
+            addToExtractionLog(`✅ Successful: ${sources.length}/${urls.length} URLs`, 'summary');
+            addToExtractionLog(`📝 Total content: ${totalContent.toLocaleString()} characters`, 'summary');
+            
+            if (failedUrls.length > 0) {
+                addToExtractionLog(`❌ Failed: ${failedUrls.length}/${urls.length} URLs`, 'warning');
+                failedUrls.forEach(failure => {
+                    const hostname = new URL(failure.url).hostname.replace('www.', '');
+                    addToExtractionLog(`   • ${hostname}: ${failure.reason}`, 'warning');
+                });
+            }
+            
+            if (sources.length === 0) {
+                const errorMessage = `No usable content extracted from any of the ${urls.length} URLs`;
+                addToExtractionLog(errorMessage, 'error');
+                throw new Error(errorMessage);
+            }
+            
+            // Combine all content
+            const combinedContent = sources.map((source, index) => 
+                `--- SOURCE ${index + 1}: ${source.title} ---\nURL: ${source.url}\nContent Length: ${source.contentLength} characters\n\n${source.content}`
+            ).join('\n\n=== NEXT SOURCE ===\n\n');
+            
+            addToExtractionLog(`📋 Content ready for article generation`, 'success');
+            addToExtractionLog('─'.repeat(50));
+            
+            return {
+                title: title,
+                urls: urls,
+                sources: sources,
+                combined_content: combinedContent,
+                source_count: sources.length,
+                failed_urls: failedUrls,
+                extraction_details: extractionDetails,
+                extraction_summary: {
+                    successful: sources.length,
+                    failed: failedUrls.length,
+                    total: urls.length,
+                    totalContentLength: totalContent
+                }
+            };
+        }
+
+        // Jina AI Reader integration - Clean and focused extraction
+        async function extractWithJinaAI(url) {
+            const jinaUrl = `https://r.jina.ai/${encodeURIComponent(url)}`;
+            
+            try {
+                const response = await fetch(jinaUrl, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json, text/plain, */*',
+                        'User-Agent': config.userAgent || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Jina AI responded with ${response.status}: ${response.statusText}`);
+                }
+
+                const contentType = response.headers.get('content-type') || '';
+                let data;
+
+                if (contentType.includes('application/json')) {
+                    data = await response.json();
+                    
+                    // Handle Jina AI JSON response structure
+                    const content = data.content || data.text || data.data || '';
+                    const title = data.title || extractTitleFromUrl(url);
+                    
+                    return {
+                        content: content.trim(),
+                        title: title.trim(),
+                        url: url,
+                        markdown: data.markdown || content
+                    };
+                    
+                } else {
+                    // Handle plain text response
+                    const textContent = await response.text();
+                    
+                    if (!textContent || textContent.trim().length < 50) {
+                        throw new Error('Response is too short or empty');
+                    }
+                    
+                    return {
+                        content: textContent.trim(),
+                        title: extractTitleFromUrl(url),
+                        url: url,
+                        markdown: textContent.trim()
+                    };
+                }
+
+            } catch (error) {
+                // Provide specific error information
+                if (error.name === 'TypeError' && error.message.includes('fetch')) {
+                    throw new Error('Network error - unable to reach Jina AI service');
+                } else if (error.message.includes('404')) {
+                    throw new Error('URL not found or inaccessible');
+                } else if (error.message.includes('403')) {
+                    throw new Error('Access forbidden - URL may be blocked');
+                } else if (error.message.includes('timeout')) {
+                    throw new Error('Request timeout - URL took too long to process');
+                } else {
+                    throw new Error(`Extraction failed: ${error.message}`);
+                }
+            }
+        }
+
+        // Helper function to extract title from URL
+        function extractTitleFromUrl(url) {
+            try {
+                const urlObj = new URL(url);
+                const hostname = urlObj.hostname.replace('www.', '');
+                const pathname = urlObj.pathname.split('/').filter(p => p && p !== '/').pop() || '';
+                
+                if (pathname) {
+                    // Convert URL slug to readable title
+                    const readableTitle = pathname
+                        .replace(/[-_]/g, ' ')
+                        .replace(/\.(html|htm|php|aspx?)$/i, '')
+                        .split(' ')
+                        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                        .join(' ');
+                    return `${readableTitle} | ${hostname}`;
+                }
+                
+                return `Article from ${hostname}`;
+            } catch {
+                return 'Extracted Article';
+            }
         }
 
         // UI rendering
@@ -767,9 +1062,12 @@
                     </div>
                     
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px;">
-                        <span style="font-size: 12px; color: #718096;">
-                            Status: ${group.status} | URLs: ${group.urls.length}
-                        </span>
+                        <div style="font-size: 12px; color: #718096;">
+                            Status: <span class="group-status-${group.id}">${group.status}</span> | URLs: ${group.urls.length}
+                            <div class="extraction-details-${group.id}" style="margin-top: 5px; display: none;">
+                                <div class="extraction-progress" style="font-size: 11px; color: #4a5568;"></div>
+                            </div>
+                        </div>
                         <button class="btn btn-small btn-danger" onclick="window.newsApp.removeSourceGroup(${group.id})">
                             Remove Group
                         </button>
@@ -791,15 +1089,40 @@
                 return;
             }
 
-            container.innerHTML = results.map((result, index) => `
-                <div class="result-item" onclick="window.newsApp.showArticlePreview(${index})">
-                    <div class="result-title">${result.title}</div>
-                    <div class="result-meta">
-                        Sources: ${result.sourceCount} | 
-                        Generated: ${new Date(result.timestamp).toLocaleString()}
+            container.innerHTML = results.map((result, index) => {
+                const summary = result.extractionSummary;
+                const totalContent = summary ? (summary.totalContentLength || 0) : 0;
+                
+                let extractionInfo = '';
+                if (summary) {
+                    const successRate = Math.round((summary.successful / summary.total) * 100);
+                    extractionInfo = `✅ ${summary.successful}/${summary.total} URLs (${successRate}%) | ${totalContent.toLocaleString()} chars`;
+                    
+                    if (summary.failed > 0) {
+                        extractionInfo += ` | ❌ ${summary.failed} failed`;
+                    }
+                } else {
+                    extractionInfo = `Sources: ${result.sourceCount}`;
+                }
+                
+                return `
+                    <div class="result-item" onclick="window.newsApp.showArticlePreview(${index})" 
+                         style="${summary && summary.failed > 0 ? 'border-left: 4px solid #f6ad55;' : ''}">
+                        <div class="result-title">${result.title}</div>
+                        <div class="result-meta" style="line-height: 1.4;">
+                            <div>${extractionInfo}</div>
+                            <div style="font-size: 11px; color: #a0aec0; margin-top: 2px;">
+                                Generated: ${new Date(result.timestamp).toLocaleString()}
+                            </div>
+                        </div>
+                        ${summary && summary.failed > 0 ? 
+                            `<div style="font-size: 11px; color: #d69e2e; margin-top: 5px; font-weight: 500;">
+                                ⚠️ Some URLs failed extraction - check extraction log for details
+                            </div>` : ''
+                        }
                     </div>
-                </div>
-            `).join('');
+                `;
+            }).join('');
         }
 
         function updateEmptyStates() {
@@ -807,7 +1130,7 @@
             emptyState.style.display = sourceGroups.length === 0 ? 'block' : 'none';
         }
 
-        // Processing
+        // Processing with improved error handling and progress updates
         window.newsApp.processAllGroups = async function() {
             const validGroups = sourceGroups.filter(g => g.urls.length > 0);
             
@@ -838,29 +1161,53 @@
             try {
                 for (let i = 0; i < validGroups.length; i++) {
                     const group = validGroups[i];
-                    const progress = ((i + 1) / validGroups.length) * 100;
-                    
-                    statusMessage.textContent = `Processing: ${group.title}`;
-                    progressFill.style.width = progress + '%';
+                    const baseProgress = (i / validGroups.length) * 100;
                     
                     try {
-                        // Extract content from URLs
+                        // Step 1: Extract content from URLs
+                        group.status = 'extracting';
+                        addToExtractionLog(`\n🔄 PROCESSING GROUP: "${group.title}"`);
+                        statusMessage.textContent = `Extracting content: ${group.title} (${group.urls.length} URLs)`;
+                        statusMessage.className = 'status-message status-info';
+                        progressFill.style.width = (baseProgress + 10) + '%';
+                        updateUI();
+                        
                         const extractedData = await extractFromMultipleUrls(group.urls, group.title);
                         
-                        if (extractedData.error) {
-                            console.error(`Failed to extract from group ${group.title}:`, extractedData.error);
-                            continue;
+                        if (!extractedData || extractedData.sources.length === 0) {
+                            throw new Error('No content could be extracted from any URL');
                         }
 
-                        // Generate article
+                        // Step 2: Generate article
+                        group.status = 'generating';
+                        addToExtractionLog(`🤖 Generating article for "${group.title}"...`);
                         statusMessage.textContent = `Generating article: ${group.title}`;
+                        progressFill.style.width = (baseProgress + 50) + '%';
+                        updateUI();
+                        
                         const article = await generateArticle(extractedData);
                         
-                        // Apply anchor text linking to the article
-                        const linkedArticle = applyAnchorTextLinking(article);
+                        if (!article || article.trim().length < 200) {
+                            throw new Error('Generated article is too short or empty');
+                        }
                         
-                        // Generate metadata
+                        addToExtractionLog(`📝 Article generated (${article.length} characters)`, 'success');
+                        
+                        // Step 3: Apply anchor text linking
+                        statusMessage.textContent = `Applying anchor links: ${group.title}`;
+                        progressFill.style.width = (baseProgress + 70) + '%';
+                        
+                        const linkedArticle = applyAnchorTextLinking(article);
+                        const linksApplied = (linkedArticle.match(/<a href=/g) || []).length;
+                        
+                        if (linksApplied > 0) {
+                            addToExtractionLog(`🔗 Applied ${linksApplied} anchor text links`, 'success');
+                        }
+                        
+                        // Step 4: Generate metadata
                         statusMessage.textContent = `Generating metadata: ${group.title}`;
+                        progressFill.style.width = (baseProgress + 85) + '%';
+                        
                         const metadata = await generateMetadata(linkedArticle, group.title);
 
                         // Add to results
@@ -869,62 +1216,81 @@
                             article: linkedArticle,
                             metadata: metadata,
                             urls: group.urls,
-                            sourceCount: group.urls.length,
-                            timestamp: new Date().toISOString()
+                            sourceCount: extractedData.sources.length,
+                            totalUrls: group.urls.length,
+                            failedUrls: extractedData.failed_urls || [],
+                            extractionSummary: extractedData.extraction_summary,
+                            timestamp: new Date().toISOString(),
+                            groupId: group.id
                         };
                         
                         results.push(result);
                         group.status = 'completed';
                         
+                        addToExtractionLog(`✅ COMPLETED: "${group.title}" - Article ready!`, 'success');
+                        statusMessage.textContent = `Completed: ${group.title}`;
+                        statusMessage.className = 'status-message status-success';
+                        progressFill.style.width = (baseProgress + 100/validGroups.length) + '%';
+                        
                     } catch (error) {
                         console.error(`Error processing group ${group.title}:`, error);
                         group.status = 'error';
+                        
+                        addToExtractionLog(`❌ ERROR processing "${group.title}": ${error.message}`, 'error');
+                        statusMessage.textContent = `Error processing ${group.title}: ${error.message}`;
+                        statusMessage.className = 'status-message status-error';
+                        
+                        // Continue with next group
+                        continue;
                     }
+                    
+                    updateUI();
                 }
 
-                statusMessage.textContent = `Completed: ${results.length}/${validGroups.length} articles generated`;
+                // Final status
+                const completedCount = results.length;
+                const totalCount = validGroups.length;
+                
                 progressFill.style.width = '100%';
+                
+                if (completedCount === totalCount) {
+                    addToExtractionLog(`\n🎉 ALL PROCESSING COMPLETE!`, 'success');
+                    addToExtractionLog(`✅ Generated ${completedCount} articles successfully!`, 'success');
+                    statusMessage.textContent = `All ${completedCount} articles generated successfully!`;
+                    statusMessage.className = 'status-message status-success';
+                    showMessage(`Generated ${completedCount} articles successfully!`, 'success');
+                } else if (completedCount > 0) {
+                    addToExtractionLog(`\n⚠️ PROCESSING PARTIALLY COMPLETE`, 'warning');
+                    addToExtractionLog(`✅ Generated: ${completedCount}/${totalCount} articles`, 'warning');
+                    addToExtractionLog(`❌ Failed: ${totalCount - completedCount} articles`, 'warning');
+                    statusMessage.textContent = `Generated ${completedCount}/${totalCount} articles (${totalCount - completedCount} failed)`;
+                    statusMessage.className = 'status-message status-info';
+                    showMessage(`Generated ${completedCount}/${totalCount} articles. Check extraction log for details.`, 'info');
+                } else {
+                    addToExtractionLog(`\n❌ PROCESSING FAILED`, 'error');
+                    addToExtractionLog(`No articles could be generated`, 'error');
+                    statusMessage.textContent = `Failed to generate any articles`;
+                    statusMessage.className = 'status-message status-error';
+                    showMessage('No articles could be generated. Check extraction log for details.', 'error');
+                }
                 
                 setTimeout(() => {
                     progressContainer.style.display = 'none';
                     loadingIndicator.style.display = 'none';
-                }, 2000);
+                }, 3000);
 
                 updateUI();
                 updateJsonPreview();
-                
-                if (results.length > 0) {
-                    showMessage(`Generated ${results.length} articles successfully!`, 'success');
-                }
 
             } catch (error) {
                 console.error('Processing error:', error);
                 showMessage('Error during processing: ' + error.message, 'error');
+                statusMessage.textContent = 'Processing failed: ' + error.message;
+                statusMessage.className = 'status-message status-error';
                 progressContainer.style.display = 'none';
                 loadingIndicator.style.display = 'none';
             }
         };
-
-        // Content extraction (simplified for web)
-        async function extractFromMultipleUrls(urls, title) {
-            console.log('Extracting from URLs:', urls);
-            
-            // Simulate delay
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            
-            return {
-                title: title,
-                urls: urls,
-                sources: urls.map(url => ({
-                    url: url,
-                    title: `Content from ${new URL(url).hostname}`,
-                    content: `Sample content extracted from ${url}. This would contain the actual article text in a real implementation.`,
-                    markdown: `# Sample Content\n\nThis is sample content extracted from ${url}.`
-                })),
-                combined_content: `Combined content from ${urls.length} sources about ${title}`,
-                source_count: urls.length
-            };
-        }
 
         // Article generation
         async function generateArticle(extractedData) {
@@ -1260,7 +1626,7 @@ Article: ${content.substring(0, 1000)}`;
                 },
                 pageURL: result.metadata?.url_slug || '',
                 relatedContentTag: result.metadata?.industry || 'All',
-                lastUpdated: new Date().toLocaleDateString('en-GB').replace(/\//g, '-')
+                lastUpdated: new Date().toLocaleDateString('en-GB')
             }));
 
             document.getElementById('jsonPreview').textContent = JSON.stringify(jsonData, null, 2);
@@ -1291,7 +1657,7 @@ Article: ${content.substring(0, 1000)}`;
                 },
                 pageURL: result.metadata?.url_slug || '',
                 relatedContentTag: result.metadata?.industry || 'All',
-                lastUpdated: new Date().toLocaleDateString('en-GB').replace(/\//g, '-')
+                lastUpdated: new Date().toLocaleDateString('en-GB')
             }));
 
             // Create and download JSON file
