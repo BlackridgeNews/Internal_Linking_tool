@@ -512,7 +512,8 @@
             timeout: 120000,
             userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
             googleSheetId: '1GT0kLFRtG8QTWgpW4O6bJh_rfgzmDWAiWbjp4hrXWA8',
-            googleApiKey: '' // Will be set by user
+            googleApiKey: '', // Will be set by user
+            jinaApiKey: '' // Optional Jina AI API key
         };
 
         // Global variable to store anchor text data
@@ -930,7 +931,8 @@
                     method: 'GET',
                     headers: {
                         'Accept': 'application/json, text/plain, */*',
-                        'User-Agent': config.userAgent || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                        'User-Agent': config.userAgent || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                        ...(config.jinaApiKey && { 'Authorization': `Bearer ${config.jinaApiKey}` })
                     }
                 });
 
@@ -1716,6 +1718,7 @@ Article: ${content.substring(0, 1000)}`;
         window.newsApp.showConfigDialog = function() {
             const currentWorkerUrl = config.workerUrl;
             const currentApiKey = config.googleApiKey;
+            const currentJinaKey = config.jinaApiKey;
 
             const configHtml = `
                 <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
@@ -1732,9 +1735,12 @@ Article: ${content.substring(0, 1000)}`;
                             <input type="text" id="configWorkerUrl" value="${currentWorkerUrl}" 
                                    style="width: 100%; padding: 10px; border: 2px solid #e2e8f0; 
                                           border-radius: 8px; font-size: 14px;">
+                            <small style="color: #718096; font-size: 12px;">
+                                Your Cloudflare Worker endpoint for LLM processing
+                            </small>
                         </div>
                         
-                        <div style="margin-bottom: 20px;">
+                        <div style="margin-bottom: 15px;">
                             <label style="display: block; margin-bottom: 5px; font-weight: 600;">
                                 Google Sheets API Key:
                             </label>
@@ -1743,6 +1749,19 @@ Article: ${content.substring(0, 1000)}`;
                                           border-radius: 8px; font-size: 14px;">
                             <small style="color: #718096; font-size: 12px;">
                                 Get your API key from Google Cloud Console → APIs & Services → Credentials
+                            </small>
+                        </div>
+                        
+                        <div style="margin-bottom: 20px;">
+                            <label style="display: block; margin-bottom: 5px; font-weight: 600;">
+                                Jina AI API Key (Optional):
+                            </label>
+                            <input type="password" id="configJinaKey" value="${currentJinaKey}" 
+                                   style="width: 100%; padding: 10px; border: 2px solid #e2e8f0; 
+                                          border-radius: 8px; font-size: 14px;" 
+                                   placeholder="Leave empty for free tier">
+                            <small style="color: #718096; font-size: 12px;">
+                                Optional: For Jina AI premium features. Free tier works without API key.
                             </small>
                         </div>
                         
@@ -1768,12 +1787,16 @@ Article: ${content.substring(0, 1000)}`;
         window.newsApp.saveConfig = function() {
             const workerUrl = document.getElementById('configWorkerUrl').value.trim();
             const apiKey = document.getElementById('configApiKey').value.trim();
+            const jinaKey = document.getElementById('configJinaKey').value.trim();
 
             if (workerUrl) {
                 config.workerUrl = workerUrl;
             }
             if (apiKey) {
                 config.googleApiKey = apiKey;
+            }
+            if (jinaKey) {
+                config.jinaApiKey = jinaKey;
             }
 
             localStorage.setItem('newsApp_config', JSON.stringify(config));
