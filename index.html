@@ -1260,7 +1260,7 @@ Article: ${content.substring(0, 1000)}`;
                 },
                 pageURL: result.metadata?.url_slug || '',
                 relatedContentTag: result.metadata?.industry || 'All',
-                lastUpdated: new Date().toLocaleDateString('en-GB')
+                lastUpdated: new Date().toLocaleDateString('en-GB').replace(/\//g, '-')
             }));
 
             document.getElementById('jsonPreview').textContent = JSON.stringify(jsonData, null, 2);
@@ -1291,7 +1291,7 @@ Article: ${content.substring(0, 1000)}`;
                 },
                 pageURL: result.metadata?.url_slug || '',
                 relatedContentTag: result.metadata?.industry || 'All',
-                lastUpdated: new Date().toLocaleDateString('en-GB')
+                lastUpdated: new Date().toLocaleDateString('en-GB').replace(/\//g, '-')
             }));
 
             // Create and download JSON file
