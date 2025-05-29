@@ -677,6 +677,40 @@ This is an article about renewable energy and solar power. The industry is growi
             let linkedContent = content;
             let linksAdded = 0;
             const matchedAnchors = [];
+            const usedAnchorTexts = new Set(); // Track which anchor texts have been used
+
+            // Collect all anchor texts with their URLs
+            const allAnchors = [];
+            anchorTextData.forEach(item => {
+                item.anchorTexts.forEach(text => {
+                    if (text && text.trim().length >= 3) { // Minimum length check
+                        allAnchors.push({
+                            text: text.trim(),
+                            url: item.url,
+                            originalText: text
+                        });
+                    }
+                });
+            });
+
+            // Sort by length (longest first) to avoid partial matches
+            allAnchors.sort((a, b) => b.text.length - a.text.length);
+
+            // Track linked positions to avoid overlaps
+            const linkedPositions = new Set();
+
+            allAnchors.forEach(anchor => {
+                // Skip if this anchor text has already been used
+                const anchorKey = anchor.text.toLowerCase();
+                if (usedAnchorTexts.has(anchorKey) || linksAdded >= 15) {
+                    return;
+                }
+
+                const escapedText = anchor.text.replace(/[.*+?^${}()|[\]\\]/g, '\\        // Apply internal links to content
+        function applyInternalLinks(content) {
+            let linkedContent = content;
+            let linksAdded = 0;
+            const matchedAnchors = [];
             const skippedAnchors = [];
 
             // Collect all anchor texts with their URLs
@@ -759,6 +793,66 @@ This is an article about renewable energy and solar power. The industry is growi
                 originalLength: content.length,
                 finalLength: linkedContent.length
             };
+        }');
+                const regex = new RegExp(`\\b${escapedText}\\b`, 'i'); // Remove 'g' flag to get only first match
+
+                const match = regex.exec(linkedContent);
+                if (match) {
+                    const startPos = match.index;
+                    const endPos = startPos + match[0].length;
+
+                    // Check if already inside HTML tag or link
+                    const beforeMatch = linkedContent.substring(0, startPos);
+                    const insideTag = beforeMatch.split('<').length > beforeMatch.split('>').length;
+                    const insideLink = beforeMatch.lastIndexOf('<a') > beforeMatch.lastIndexOf('</a>');
+
+                    if (insideTag || insideLink) {
+                        return; // Skip this anchor
+                    }
+
+                    // Check for position overlap
+                    let hasOverlap = false;
+                    for (let i = startPos; i < endPos; i++) {
+                        if (linkedPositions.has(i)) {
+                            hasOverlap = true;
+                            break;
+                        }
+                    }
+
+                    if (!hasOverlap) {
+                        // Mark positions as linked
+                        for (let i = startPos; i < endPos; i++) {
+                            linkedPositions.add(i);
+                        }
+
+                        // Create the link
+                        const linkHtml = `<a href="${anchor.url}" target="_blank" style="color: #667eea; text-decoration: underline; font-weight: 500;">${match[0]}</a>`;
+                        linkedContent = linkedContent.substring(0, startPos) + 
+                                      linkHtml + 
+                                      linkedContent.substring(endPos);
+                        
+                        linksAdded++;
+                        matchedAnchors.push({
+                            text: match[0],
+                            url: anchor.url,
+                            position: startPos
+                        });
+
+                        // Mark this anchor text as used
+                        usedAnchorTexts.add(anchorKey);
+                    }
+                }
+            });
+
+            return {
+                content: linkedContent,
+                linksAdded: linksAdded,
+                matchedAnchors: matchedAnchors,
+                totalAnchorsAvailable: allAnchors.length,
+                uniqueAnchorsUsed: usedAnchorTexts.size,
+                originalLength: content.length,
+                finalLength: linkedContent.length
+            };
         }
 
         // Display the result
@@ -779,19 +873,29 @@ This is an article about renewable energy and solar power. The industry is growi
             const stats = `
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-top: 8px;">
                     <div><strong>Links Added:</strong> ${result.linksAdded}</div>
+                    <div><strong>Unique Anchors Used:</strong> ${result.uniqueAnchorsUsed}</div>
                     <div><strong>Available Anchors:</strong> ${result.totalAnchorsAvailable}</div>
                     <div><strong>Original Length:</strong> ${result.originalLength.toLocaleString()} chars</div>
                     <div><strong>Final Length:</strong> ${result.finalLength.toLocaleString()} chars</div>
                 </div>
                 ${result.matchedAnchors.length > 0 ? `
-                <div style="margin-top: 10px;">
-                    <strong>Matched Anchor Texts:</strong>
-                    <div style="font-size: 12px; margin-top: 5px; line-height: 1.4;">
-                        ${result.matchedAnchors.map(anchor => `• "${anchor.text}" → ${new URL(anchor.url).hostname}`).join('<br>')}
+                <div style="margin-top: 15px;">
+                    <strong>📍 Matched Anchor Texts & Context:</strong>
+                    <div style="font-size: 12px; margin-top: 8px; line-height: 1.6; max-height: 200px; overflow-y: auto; background: #f8fafc; padding: 10px; border-radius: 6px;">
+                        ${result.matchedAnchors.map((anchor, index) => {
+                            const contextIcon = getContextIcon(anchor.context);
+                            const hostname = new URL(anchor.url).hostname.replace('www.', '');
+                            return `<div style="margin-bottom: 6px; padding: 4px 0; border-bottom: 1px solid #e2e8f0;">
+                                <span style="color: #2d3748; font-weight: 500;">${contextIcon} "${anchor.text}"</span>
+                                <br><span style="color: #718096; font-size: 11px;">→ ${hostname} • Context: <em>${anchor.context}</em></span>
+                            </div>`;
+                        }).join('')}
                     </div>
                 </div>
                 ` : ''}
             `;
+            
+            linkingStats.innerHTML = stats;
             
             linkingStats.innerHTML = stats;
             statsContainer.style.display = 'block';
@@ -948,26 +1052,110 @@ This is an article about renewable energy and solar power. The industry is growi
 
         // Sample content for demo
         function loadSampleContent() {
-            const sampleContent = `# The Future of Renewable Energy
+            const sampleContent = `<h1>Comprehensive Guide to Renewable Energy Technologies</h1>
 
-The renewable energy sector continues to experience unprecedented growth as countries worldwide commit to reducing carbon emissions. Solar power has emerged as one of the most promising technologies, with solar panel efficiency improving dramatically over the past decade.
+<p>The renewable energy sector continues to experience unprecedented growth as countries worldwide commit to reducing carbon emissions. <strong>Solar power</strong> has emerged as one of the most promising technologies, with solar panel efficiency improving dramatically over the past decade.</p>
 
-## Market Trends and Investment
+<h2>Market Investment Overview</h2>
 
-Wind energy projects are attracting billions in investment, particularly in offshore wind farms. The hydroelectric power industry remains stable, providing consistent baseload power to millions of homes. Energy storage solutions are becoming increasingly important as battery technology advances.
+<p>Wind energy projects are attracting billions in investment, particularly in offshore wind farms. The hydroelectric power industry remains stable, providing consistent baseload power to millions of homes.</p>
 
-## Technology Innovations
+<h3>Key Investment Areas</h3>
+<ul>
+    <li>Solar panel manufacturing and installation</li>
+    <li>Wind energy infrastructure development</li>
+    <li>Energy storage solutions and battery technology</li>
+    <li>Smart grid technology implementation</li>
+    <li>Electric vehicles charging infrastructure</li>
+</ul>
 
-Electric vehicles are driving demand for clean electricity, creating a virtuous cycle for renewable energy adoption. Smart grid technology enables better integration of distributed energy resources, while artificial intelligence helps optimize energy production and consumption.
+<h2>Technology Comparison Table</h2>
 
-## Industry Challenges
+<table border="1" style="border-collapse: collapse; width: 100%; margin: 20px 0;">
+    <thead>
+        <tr style="background-color: #f0f0f0;">
+            <th style="padding: 10px; text-align: left;">Technology</th>
+            <th style="padding: 10px; text-align: left;">Efficiency</th>
+            <th style="padding: 10px; text-align: left;">Cost per MWh</th>
+            <th style="padding: 10px; text-align: left;">Scalability</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td style="padding: 10px;">Solar power</td>
+            <td style="padding: 10px;">20-22%</td>
+            <td style="padding: 10px;">$40-60</td>
+            <td style="padding: 10px;">High</td>
+        </tr>
+        <tr>
+            <td style="padding: 10px;">Wind energy</td>
+            <td style="padding: 10px;">35-45%</td>
+            <td style="padding: 10px;">$30-50</td>
+            <td style="padding: 10px;">Very High</td>
+        </tr>
+        <tr>
+            <td style="padding: 10px;">Hydroelectric power</td>
+            <td style="padding: 10px;">80-90%</td>
+            <td style="padding: 10px;">$20-40</td>
+            <td style="padding: 10px;">Limited</td>
+        </tr>
+        <tr>
+            <td style="padding: 10px;">Battery technology</td>
+            <td style="padding: 10px;">85-95%</td>
+            <td style="padding: 10px;">$100-200</td>
+            <td style="padding: 10px;">Moderate</td>
+        </tr>
+    </tbody>
+</table>
 
-Despite rapid progress, the renewable energy industry faces challenges including grid stability, intermittency issues, and the need for massive infrastructure investments. However, government policies and falling costs continue to drive adoption across both residential and commercial sectors.
+<h2>Implementation Steps</h2>
 
-The transition to clean energy represents one of the most significant economic opportunities of our time, with potential for job creation and technological innovation across multiple industries.`;
+<ol>
+    <li><strong>Assessment Phase</strong>
+        <ul>
+            <li>Evaluate current energy infrastructure</li>
+            <li>Analyze renewable energy potential</li>
+            <li>Review government policies and incentives</li>
+        </ul>
+    </li>
+    <li><strong>Planning Phase</strong>
+        <ul>
+            <li>Design integrated renewable energy systems</li>
+            <li>Plan smart grid technology integration</li>
+            <li>Coordinate with electric vehicles infrastructure</li>
+        </ul>
+    </li>
+    <li><strong>Implementation Phase</strong>
+        <ul>
+            <li>Install solar panel arrays and wind energy systems</li>
+            <li>Deploy energy storage solutions</li>
+            <li>Connect to artificial intelligence monitoring systems</li>
+        </ul>
+    </li>
+</ol>
+
+<h2>Industry Challenges and Solutions</h2>
+
+<p>Despite rapid progress in renewable energy, the industry faces several challenges:</p>
+
+<blockquote style="border-left: 4px solid #667eea; padding-left: 20px; margin: 20px 0; font-style: italic; color: #4a5568;">
+    "The transition to clean energy represents one of the most significant economic opportunities of our time, with potential for job creation and technological innovation across multiple industries." - Energy Sector Analysis 2024
+</blockquote>
+
+<p>Key challenges include grid stability, intermittency issues, and the need for massive infrastructure investments. However, government policies and falling costs continue to drive adoption across both residential and commercial sectors.</p>
+
+<h3>Solutions in Development</h3>
+<ul>
+    <li>Advanced battery technology for better energy storage</li>
+    <li>Smart grid technology for improved distribution</li>
+    <li>Artificial intelligence for predictive maintenance</li>
+    <li>Integration with electric vehicles for distributed storage</li>
+</ul>
+
+<p>The renewable energy sector continues to evolve rapidly, with new innovations in solar power efficiency, wind energy capture, and energy storage solutions emerging regularly.</p>`;
 
             document.getElementById('inputContent').value = sampleContent;
-            showMessage('Sample content loaded! Try running the internal linking tool.', 'info');
+            showMessage('Sample content with tables, lists, and headings loaded!', 'info');
         }
 
         // Add sample content button (hidden by default, can be shown for demo)
