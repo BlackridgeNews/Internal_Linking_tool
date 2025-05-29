@@ -677,40 +677,6 @@ This is an article about renewable energy and solar power. The industry is growi
             let linkedContent = content;
             let linksAdded = 0;
             const matchedAnchors = [];
-            const usedAnchorTexts = new Set(); // Track which anchor texts have been used
-
-            // Collect all anchor texts with their URLs
-            const allAnchors = [];
-            anchorTextData.forEach(item => {
-                item.anchorTexts.forEach(text => {
-                    if (text && text.trim().length >= 3) { // Minimum length check
-                        allAnchors.push({
-                            text: text.trim(),
-                            url: item.url,
-                            originalText: text
-                        });
-                    }
-                });
-            });
-
-            // Sort by length (longest first) to avoid partial matches
-            allAnchors.sort((a, b) => b.text.length - a.text.length);
-
-            // Track linked positions to avoid overlaps
-            const linkedPositions = new Set();
-
-            allAnchors.forEach(anchor => {
-                // Skip if this anchor text has already been used
-                const anchorKey = anchor.text.toLowerCase();
-                if (usedAnchorTexts.has(anchorKey) || linksAdded >= 15) {
-                    return;
-                }
-
-                const escapedText = anchor.text.replace(/[.*+?^${}()|[\]\\]/g, '\\        // Apply internal links to content
-        function applyInternalLinks(content) {
-            let linkedContent = content;
-            let linksAdded = 0;
-            const matchedAnchors = [];
             const skippedAnchors = [];
 
             // Collect all anchor texts with their URLs
@@ -793,66 +759,6 @@ This is an article about renewable energy and solar power. The industry is growi
                 originalLength: content.length,
                 finalLength: linkedContent.length
             };
-        }');
-                const regex = new RegExp(`\\b${escapedText}\\b`, 'i'); // Remove 'g' flag to get only first match
-
-                const match = regex.exec(linkedContent);
-                if (match) {
-                    const startPos = match.index;
-                    const endPos = startPos + match[0].length;
-
-                    // Check if already inside HTML tag or link
-                    const beforeMatch = linkedContent.substring(0, startPos);
-                    const insideTag = beforeMatch.split('<').length > beforeMatch.split('>').length;
-                    const insideLink = beforeMatch.lastIndexOf('<a') > beforeMatch.lastIndexOf('</a>');
-
-                    if (insideTag || insideLink) {
-                        return; // Skip this anchor
-                    }
-
-                    // Check for position overlap
-                    let hasOverlap = false;
-                    for (let i = startPos; i < endPos; i++) {
-                        if (linkedPositions.has(i)) {
-                            hasOverlap = true;
-                            break;
-                        }
-                    }
-
-                    if (!hasOverlap) {
-                        // Mark positions as linked
-                        for (let i = startPos; i < endPos; i++) {
-                            linkedPositions.add(i);
-                        }
-
-                        // Create the link
-                        const linkHtml = `<a href="${anchor.url}" target="_blank" style="color: #667eea; text-decoration: underline; font-weight: 500;">${match[0]}</a>`;
-                        linkedContent = linkedContent.substring(0, startPos) + 
-                                      linkHtml + 
-                                      linkedContent.substring(endPos);
-                        
-                        linksAdded++;
-                        matchedAnchors.push({
-                            text: match[0],
-                            url: anchor.url,
-                            position: startPos
-                        });
-
-                        // Mark this anchor text as used
-                        usedAnchorTexts.add(anchorKey);
-                    }
-                }
-            });
-
-            return {
-                content: linkedContent,
-                linksAdded: linksAdded,
-                matchedAnchors: matchedAnchors,
-                totalAnchorsAvailable: allAnchors.length,
-                uniqueAnchorsUsed: usedAnchorTexts.size,
-                originalLength: content.length,
-                finalLength: linkedContent.length
-            };
         }
 
         // Display the result
@@ -873,7 +779,6 @@ This is an article about renewable energy and solar power. The industry is growi
             const stats = `
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-top: 8px;">
                     <div><strong>Links Added:</strong> ${result.linksAdded}</div>
-                    <div><strong>Unique Anchors Used:</strong> ${result.uniqueAnchorsUsed}</div>
                     <div><strong>Available Anchors:</strong> ${result.totalAnchorsAvailable}</div>
                     <div><strong>Original Length:</strong> ${result.originalLength.toLocaleString()} chars</div>
                     <div><strong>Final Length:</strong> ${result.finalLength.toLocaleString()} chars</div>
